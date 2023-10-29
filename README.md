@@ -113,7 +113,7 @@ The "Project Code" management is an optional and advanced feature. This feature 
 
 <img src="https://user-images.githubusercontent.com/19658/278875510-c09dc791-3ee1-4f80-928c-6d610418b89e.gif" width=500>
 
-By default, setting a project code is optional. However, if your organization consistently requires all employees to set a code, you can modify the source code, `functions/internals/views.ts``, by removing the `"optional": true`` flag in the relevant sections.
+By default, setting a project code is optional. However, if your organization consistently requires all employees to set a code, you can modify the source code, `functions/internals/views.ts`, by removing the `"optional": true` flag in the relevant sections.
 
 ### Other Features
 
