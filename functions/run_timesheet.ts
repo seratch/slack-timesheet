@@ -168,7 +168,6 @@ export default SlackFunction(
       const { view } = args;
       const components = await injectComponents({ ...args });
       const { user, yyyymmdd, isDebugMode } = components;
-      console.log(view);
       try {
         const type = stateValue(view, BlockId.Type)!.selected_option!.value;
         const start = stateValue(view, BlockId.Start)!.selected_time!;
@@ -1016,7 +1015,6 @@ export default SlackFunction(
         components;
       try {
         if (!await canAccessAdminFeature()) return {};
-        console.log(action);
         const [key, value] = action.selected_option.value.split("___");
         if (!Object.keys(OrganizationPolices).includes(key)) {
           return {};
