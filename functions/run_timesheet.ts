@@ -634,12 +634,9 @@ export default SlackFunction(
       const { user } = components;
       try {
         let country_id = "";
-        if (
-          view.state.values[BlockId.Language]?.[ActionId.Input]
-            ?.selected_option?.value
-        ) {
-          country_id = view.state.values[BlockId.Language][ActionId.Input]
-            .selected_option.value;
+        const country = stateValue(view, BlockId.Country)?.selected_option;
+        if (country) {
+          country_id = country.value;
         }
         const attributes: Attributes<US> = { user, language, country_id };
         const saved = await saveUserSettings({ attributes, ...components });
