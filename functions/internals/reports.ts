@@ -272,7 +272,7 @@ export function generateDailyReport({
             const [start, end] = [e.end, ongoingWorkEnd];
             ongoingWork = {
               start,
-              end: ongoingWorkEnd,
+              end,
               type: EntryType.Work,
               type_label: workType,
               type_emoji: Emoji.Work,
@@ -334,9 +334,9 @@ export function generateDailyReport({
     work_minutes: workMinutes,
     break_time_minutes: breakTimeMinutes,
     time_off_minutes: timeOffMinutes,
-    work_hours: Math.round(workMinutes / 60 * 10) / 10,
-    break_time_hours: Math.round(breakTimeMinutes / 60 * 10) / 10,
-    time_off_hours: Math.round(timeOffMinutes / 60 * 10) / 10,
+    work_hours: Math.round(workMinutes / 6) / 10,
+    break_time_hours: Math.round(breakTimeMinutes / 6) / 10,
+    time_off_hours: Math.round(timeOffMinutes / 6) / 10,
     entries,
     projects,
   };

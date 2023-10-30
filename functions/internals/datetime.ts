@@ -50,7 +50,7 @@ export function nowHHMM(timeOffset: number): string {
 export function dayDuration(days: number, language: string): string {
   if (days >= 1) {
     const unit = i18n(days >= 2 ? Label.days : Label.day, language);
-    return Math.round(days) + " " + unit;
+    return Math.floor(days) + " " + unit;
   }
   return "";
 }
@@ -58,7 +58,7 @@ export function dayDuration(days: number, language: string): string {
 export function hourDuration(hours: number, language: string): string {
   if (hours >= 1) {
     const unit = i18n(hours >= 2 ? Label.hours : Label.hour, language);
-    return Math.round(hours) + " " + unit;
+    return Math.floor(hours) + " " + unit;
   }
   return "";
 }
