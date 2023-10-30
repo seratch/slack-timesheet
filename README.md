@@ -115,9 +115,13 @@ The "Project Code" management is an optional and advanced feature. This feature 
 
 By default, setting a project code is optional. However, if your organization consistently requires all employees to set a code, you can modify the source code, `functions/internals/views.ts`, by removing the `"optional": true` flag in the relevant sections.
 
+### Organization Policies
+
+As an admin, you have the ability to manage policies that apply across your organization. These policies can become crucial when evaluating this application's utility for real business operations. For instance, in accordance with Japanese labor law, it is considered a best practice to limit manually created time records. In light of this strict policy, it is mandatory for employees to use a time card or an equivalent. One of the built-in organization policies allows this app to function as a virtual time card, thereby adhering to such regulations.
+
 ### Other Features
 
-The development of this app has just begun, and it's still undergoing significant evolution! We are actively working on more features, including permission control, holiday considration, and more customization options. If you're interested, examining the datastore tables such as `admin_users`, `countries`, and `public_holidays` plus the code using the table could provide useful insights.
+The development of this app has just begun, and it's still undergoing significant evolution! We are actively working on more features, including permission control, holiday considration, and more customization options. If you're interested, examining the datastore tables such as `admin_users`, `organization_policies`, `countries`, and `public_holidays` plus the code using the table could provide useful insights.
 
 ## Feedback
 
