@@ -63,7 +63,7 @@ export function hourDuration(hours: number, language: string): string {
   return "";
 }
 export function minuteDuration(minutes: number, language: string): string {
-  const m = minutes % 60;
+  const m = Math.floor(minutes) % 60;
   if (m !== 0) {
     const unit = i18n(m >= 2 ? Label.minutes : Label.minute, language);
     return m + " " + unit;
