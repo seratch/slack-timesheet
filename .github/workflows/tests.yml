@@ -1,0 +1,24 @@
+name: Run lint and tests
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+jobs:
+  deno:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Setup repo
+        uses: actions/checkout@v3
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+      - name: Verify formatting
+        run: deno fmt --check **/*.ts
+      - name: Run linter
+        run: deno lint
+      - name: Run tests
+        run: deno test
+      - name: Run type check
+        run: deno check *.ts && deno check **/*.ts && deno check **/**/*.ts

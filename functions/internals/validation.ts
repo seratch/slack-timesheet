@@ -140,6 +140,6 @@ export async function validateProjectSubmission(
 }
 
 const PROJECT_CODE_PATTERN = /^[a-zA-Z0-9_-]*$/;
-function areAllCharsAllowedForProjectCode(code: string): boolean {
+export function areAllCharsAllowedForProjectCode(code: string): boolean {
   return PROJECT_CODE_PATTERN.test(code);
 }
