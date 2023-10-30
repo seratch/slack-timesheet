@@ -16,9 +16,6 @@ export default Manifest({
   outgoingDomains: [
     "files.slack.com", // for uploadng files
   ],
-  functions: [
-    RunTimesheet,
-  ],
   workflows: [
     Timesheet,
   ],
