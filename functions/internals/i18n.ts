@@ -22,6 +22,7 @@ labels[Label.MoveToToday] = { "ja": "今日の画面へ移動" };
 labels[Label.UserSettings] = { "ja": "ユーザー設定" };
 labels[Label.Calendar] = { "ja": "カレンダー" };
 labels[Label.MonthlyReport] = { "ja": "月次レポート" };
+labels[Label.OrganizationPolicies] = { "ja": "組織ポリシー" };
 labels[Label.ProjectMain] = { "ja": "プロジェクト" };
 labels[Label.ProjectSummary] = { "ja": "プロジェクトのサマリー" };
 labels[Label.AddProject] = { "ja": "プロジェクト追加" };
@@ -68,6 +69,9 @@ labels[Label.CodeAlreadyExists] = { "ja": "このコードはすでに存在し�
 labels[Label.ProjectCodeTextValidationError] = {
   "ja": "コードには英数字か '-', '_' のみを使用できます",
 };
+labels[Label.ManualEntryPermitted] = { "ja": "履歴の手入力・編集を許可する" };
+labels[Label.OrganizationPolicyValue_Permitted] = { "ja": "可" };
+labels[Label.OrganizationPolicyValue_Restricted] = { "ja": "不可" };
 
 export function i18n(english: string, language: string): string {
   const entry = labels[english];
