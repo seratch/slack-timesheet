@@ -122,17 +122,17 @@ export async function generateReport({
       }
     }
   }
-  report.work_hours = Math.round(report.work_minutes / 6) / 10;
-  report.break_time_hours = Math.round(report.break_time_minutes / 6) / 10;
-  report.time_off_hours = Math.round(report.time_off_minutes / 6) / 10;
+  report.work_hours = Math.floor(report.work_minutes / 6) / 10;
+  report.break_time_hours = Math.floor(report.break_time_minutes / 6) / 10;
+  report.time_off_hours = Math.floor(report.time_off_minutes / 6) / 10;
   report.entry_hours = (
-    Math.round(report.work_minutes / 6) +
-    Math.round(report.break_time_minutes / 6) +
-    Math.round(report.time_off_minutes / 6)
+    Math.floor(report.work_minutes / 6) +
+    Math.floor(report.break_time_minutes / 6) +
+    Math.floor(report.time_off_minutes / 6)
   ) / 10;
   if (report.projects) {
     for (const p of report.projects) {
-      p.work_hours = Math.round(p.work_minutes / 6) / 10;
+      p.work_hours = Math.floor(p.work_minutes / 6) / 10;
     }
     report.projects.sort((a, b) => a.work_minutes > b.work_minutes ? -1 : 1);
   }
@@ -324,7 +324,7 @@ export function generateDailyReport({
     projects.push({
       project_code,
       work_minutes,
-      work_hours: Math.round(work_minutes / 6) / 10,
+      work_hours: Math.floor(work_minutes / 6) / 10,
     });
   }
   projects.sort((a, b) => a.work_minutes > b.work_minutes ? -1 : 1);
@@ -334,9 +334,9 @@ export function generateDailyReport({
     work_minutes: workMinutes,
     break_time_minutes: breakTimeMinutes,
     time_off_minutes: timeOffMinutes,
-    work_hours: Math.round(workMinutes / 6) / 10,
-    break_time_hours: Math.round(breakTimeMinutes / 6) / 10,
-    time_off_hours: Math.round(timeOffMinutes / 6) / 10,
+    work_hours: Math.floor(workMinutes / 6) / 10,
+    break_time_hours: Math.floor(breakTimeMinutes / 6) / 10,
+    time_off_hours: Math.floor(timeOffMinutes / 6) / 10,
     entries,
     projects,
   };
