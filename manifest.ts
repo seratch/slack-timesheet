@@ -1,6 +1,5 @@
 import { Manifest } from "deno-slack-sdk/mod.ts";
 import Timesheet from "./workflows/timesheet.ts";
-import { def as RunTimesheet } from "./functions/run_timesheet.ts";
 
 import TimeEntries from "./datastores/time_entries.ts";
 import UserSettings from "./datastores/user_settings.ts";
