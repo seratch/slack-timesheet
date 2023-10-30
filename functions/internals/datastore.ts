@@ -13,6 +13,7 @@ import Countries from "../../datastores/countries.ts";
 import PublicHolidays from "../../datastores/public_holidays.ts";
 import AdminUsers from "../../datastores/admin_users.ts";
 import Projects from "../../datastores/projects.ts";
+import OrganizationPolicies from "../../datastores/organization_policies.ts";
 
 import { todayYYYYMMDD } from "./datetime.ts";
 
@@ -24,8 +25,9 @@ export type C = typeof Countries.definition;
 export type PH = typeof PublicHolidays.definition;
 export type AU = typeof AdminUsers.definition;
 export type P = typeof Projects.definition;
+export type OP = typeof OrganizationPolicies.definition;
 
-function createDataMapper<DEF extends TE | US | C | PH | AU | P>(
+function createDataMapper<DEF extends TE | US | C | PH | AU | P | OP>(
   def: DEF,
   client: Client,
   logLevel: LogLevel,
@@ -54,6 +56,9 @@ export function AUMapper(client: Client, logLevel: LogLevel): DataMapper<AU> {
 }
 export function PMapper(client: Client, logLevel: LogLevel): DataMapper<P> {
   return createDataMapper(Projects.definition, client, logLevel);
+}
+export function OPMapper(client: Client, logLevel: LogLevel): DataMapper<OP> {
+  return createDataMapper(OrganizationPolicies.definition, client, logLevel);
 }
 
 export async function fetchUserDetails(

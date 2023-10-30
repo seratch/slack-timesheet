@@ -10,6 +10,8 @@ import {
   C,
   CMapper,
   fetchUserDetails,
+  OP,
+  OPMapper,
   P,
   PH,
   PHMapper,
@@ -42,6 +44,7 @@ export interface Components {
   ph: DataMapper<PH>;
   us: DataMapper<US>;
   p: DataMapper<P>;
+  op: DataMapper<OP>;
   au: DataMapper<AU>;
   user: string;
   settings: SavedAttributes<US>;
@@ -115,6 +118,7 @@ export async function injectComponents(
     c: CMapper(client, logLevel),
     ph,
     p: PMapper(client, logLevel),
+    op: OPMapper(client, logLevel),
     au,
     holidays,
     yyyymmdd: _yyyymmdd,

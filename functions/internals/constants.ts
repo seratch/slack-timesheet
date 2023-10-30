@@ -10,6 +10,7 @@ export class CallbackId {
   static ProjectMainView = "project_main_view";
   static AddProject = "add_project";
   static EditProjct = "edit_project";
+  static OrganizationPolicies = "organization_policies";
 }
 
 export class BlockId {
@@ -43,6 +44,7 @@ export class ActionId {
   static Refresh = "refresh";
   static AddProject = "add_project";
   static EditProject = "edit_project";
+  static OrganizationPolicyChange = "organization_policy_change";
 }
 
 export class MenuItem {
@@ -51,6 +53,7 @@ export class MenuItem {
   static Calendar = "calendar";
   static MonthlyReport = "monthly_report";
   static ProjectSettings = "project_settings";
+  static OrganizationPolicies = "organization_policies";
 }
 
 export class Emoji {
@@ -90,6 +93,7 @@ export class Label {
   static AddProject = "Add Project";
   static EditProject = "Edit Project";
   static ProjectSettings = "Project Settings";
+  static OrganizationPolicies = "Organization Policies";
   static StartWork = "Start work";
   static FinishWork = "Finish work";
   static StartBreakTime = "Start break time";
@@ -126,6 +130,9 @@ export class Label {
   static ProjectCodeTextValidationError =
     "A project code can consist of alphanumeric characters, dashes (-), and underscores(_).";
   static CodeAlreadyExists = "The code already exists";
+  static ManualEntryPermitted = "Manual Entry Permitted";
+  static OrganizationPolicyValue_Permitted = "Permitted";
+  static OrganizationPolicyValue_Restricted = "Restricted";
 }
 
 export class EntryType {

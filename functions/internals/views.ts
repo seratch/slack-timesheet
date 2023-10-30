@@ -26,6 +26,7 @@ import {
   C,
   deserializeTimeEntry,
   EnhancedTimeEntry,
+  OP,
   P,
   PH,
   serializeTimeEntry,
@@ -56,6 +57,7 @@ import {
 } from "./private_metadata.ts";
 
 import { View } from "deno-slack-sdk/functions/interactivity/view_types.ts";
+import { OrganizationPolices } from "./organization_policies.ts";
 
 // -----------------------------------------
 // view.state.values utility
@@ -145,6 +147,10 @@ export function TitleEditProject(language: string): PlainTextField {
   return buildTitle(i18n(Label.EditProject, language));
 }
 
+export function TitleOrganizationPolicies(language: string): PlainTextField {
+  return buildTitle(i18n(Label.OrganizationPolicies, language));
+}
+
 export function Back(language: string): PlainTextField {
   return { "type": "plain_text", "text": i18n(Label.Back, language) };
 }
@@ -195,6 +201,7 @@ export function CountryOptions(
 
 interface syncMainViewArgs {
   isDebugMode: boolean;
+  manualEntryPermitted: boolean;
   viewId: string;
   entryForTheDay: SavedAttributes<TE>;
   slackApi: SlackAPIClient;
@@ -214,6 +221,7 @@ export async function syncMainView({
   yyyymmdd,
   canAccessAdminFeature,
   isDebugMode,
+  manualEntryPermitted,
 }: syncMainViewArgs) {
   const privateMetadata: MainViewPrivateMetadata = { yyyymmdd };
   await slackApi.views.update({
@@ -226,6 +234,7 @@ export async function syncMainView({
       "close": QuitThisApp(language),
       "blocks": await mainViewBlocks({
         isDebugMode,
+        manualEntryPermitted,
         item: entryForTheDay,
         offset,
         language,
@@ -239,6 +248,7 @@ export async function syncMainView({
 
 interface toMainViewArgs {
   isDebugMode: boolean;
+  manualEntryPermitted: boolean;
   view: ModalView;
   offset: number;
   language: string;
@@ -250,6 +260,7 @@ interface toMainViewArgs {
 export async function toMainView(
   {
     isDebugMode,
+    manualEntryPermitted,
     view,
     offset,
     language,
@@ -264,6 +275,7 @@ export async function toMainView(
   view.private_metadata = JSON.stringify(privateMedata);
   view.blocks = await mainViewBlocks({
     isDebugMode,
+    manualEntryPermitted,
     offset,
     language,
     item,
@@ -276,6 +288,7 @@ export async function toMainView(
 
 interface mainViewBlocksArgs {
   isDebugMode: boolean;
+  manualEntryPermitted: boolean;
   offset: number;
   language: string;
   item: SavedAttributes<TE>;
@@ -285,6 +298,7 @@ interface mainViewBlocksArgs {
 }
 export async function mainViewBlocks({
   isDebugMode,
+  manualEntryPermitted,
   offset,
   language,
   item,
@@ -344,6 +358,24 @@ export async function mainViewBlocks({
       emoji = Emoji.TimeOff;
     }
     if (end === "" || end === undefined) {
+      const options: PlainTextOption[] = [];
+      if (manualEntryPermitted) {
+        options.push({
+          "text": {
+            "type": "plain_text",
+            "text": i18n(Label.Edit, language),
+          },
+          "value": `edit___${entry}`,
+        });
+      }
+      options.push({
+        "text": {
+          "type": "plain_text",
+          "text": i18n(Label.Delete, language),
+        },
+        "value": `delete___${entry}`,
+      });
+
       entryBlocks.push({
         "type": "section",
         "text": {
@@ -353,22 +385,7 @@ export async function mainViewBlocks({
         "accessory": {
           "type": "overflow",
           "action_id": ActionId.EditOrDeleteEntry,
-          "options": [
-            {
-              "text": {
-                "type": "plain_text",
-                "text": i18n(Label.Edit, language),
-              },
-              "value": `edit___${entry}`,
-            },
-            {
-              "text": {
-                "type": "plain_text",
-                "text": i18n(Label.Delete, language),
-              },
-              "value": `delete___${entry}`,
-            },
-          ],
+          "options": options,
         },
       });
       if (type === EntryType.BreakTime) {
@@ -454,6 +471,13 @@ export async function mainViewBlocks({
         "text": i18n(Label.ProjectSettings, language),
       },
       "value": MenuItem.ProjectSettings,
+    });
+    menuItems.push({
+      "text": {
+        "type": "plain_text",
+        "text": i18n(Label.OrganizationPolicies, language),
+      },
+      "value": MenuItem.OrganizationPolicies,
     });
   }
 
@@ -597,23 +621,25 @@ export async function mainViewBlocks({
     }
   }
   const blocks = topBlocks.concat(entryBlocks);
-  if (entryBlocks.length != 0) {
-    blocks.push({ "type": "divider" });
-  }
-  blocks.push({
-    "type": "actions",
-    "elements": [
-      {
-        "type": "button",
-        "action_id": ActionId.AddEntry,
-        "text": {
-          "type": "plain_text",
-          "text": i18n(Label.AddAnEntry, language),
+  if (manualEntryPermitted) {
+    if (entryBlocks.length != 0) {
+      blocks.push({ "type": "divider" });
+    }
+    blocks.push({
+      "type": "actions",
+      "elements": [
+        {
+          "type": "button",
+          "action_id": ActionId.AddEntry,
+          "text": {
+            "type": "plain_text",
+            "text": i18n(Label.AddAnEntry, language),
+          },
+          "value": "1",
         },
-        "value": "1",
-      },
-    ],
-  });
+      ],
+    });
+  }
   return blocks;
 }
 
@@ -1338,4 +1364,52 @@ export function newEditProjectView({
     "private_metadata": JSON.stringify(privateMetaedata),
     "blocks": blocks,
   };
+}
+
+// -----------------------------------------
+// Time Entry view
+// -----------------------------------------
+
+interface toOrganizationPoliciesViewArgs {
+  view: ModalView;
+  policies: SavedAttributes<OP>[];
+  language: string;
+}
+export function toOrganizationPoliciesView({
+  view,
+  policies,
+  language,
+}: toOrganizationPoliciesViewArgs): ModalView {
+  view.callback_id = CallbackId.OrganizationPolicies;
+  view.title = TitleOrganizationPolicies(language);
+  view.close = Back(language);
+
+  for (const [key, details] of Object.entries(OrganizationPolices)) {
+    const options: PlainTextOption[] = [];
+    for (const v of details.values) {
+      options.push({
+        text: { type: "plain_text", text: i18n(v.label, language) },
+        value: key + "___" + v.value,
+      });
+    }
+    let selectedOption = options[0];
+    const saved = policies.find((p) => p.key === key);
+    if (saved) {
+      const savedOption = options.find((o) =>
+        o.value === key + "___" + saved.value
+      );
+      if (savedOption) selectedOption = savedOption;
+    }
+    view.blocks.push({
+      "type": "section",
+      "text": { "type": "mrkdwn", "text": i18n(details.label, language) },
+      "accessory": {
+        "type": "static_select",
+        "action_id": ActionId.OrganizationPolicyChange,
+        "options": options,
+        "initial_option": selectedOption,
+      },
+    });
+  }
+  return view;
 }

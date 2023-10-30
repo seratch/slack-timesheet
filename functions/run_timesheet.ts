@@ -31,6 +31,7 @@ import {
   syncProjectMainView,
   toCalendarView,
   toMainView,
+  toOrganizationPoliciesView,
   toProjectMainView,
   toReportResultView,
   toReportStartView,
@@ -64,6 +65,10 @@ import {
   validateProjectSubmission,
   validateTimeEntrySubmission,
 } from "./internals/validation.ts";
+import {
+  isManualEntryPermitted,
+  OrganizationPolices,
+} from "./internals/organization_policies.ts";
 
 export const def = DefineFunction({
   callback_id: "run_timesheet",
@@ -85,8 +90,12 @@ export default SlackFunction(
     // --------------------------------------------
     // Launch the app
     // --------------------------------------------
-    const { inputs: { user_id, interactivity: { interactivity_pointer } } } =
-      args;
+    const {
+      inputs: {
+        user_id,
+        interactivity: { interactivity_pointer },
+      },
+    } = args;
     const components = await injectComponents({ ...args });
     const { language, settings, isDebugMode } = components;
     let view: ModalView = newView(language);
@@ -101,18 +110,22 @@ export default SlackFunction(
       });
     } else {
       const item = await fetchTimeEntry({ ...components });
+      const manualEntryPermitted = await isManualEntryPermitted({
+        ...components,
+      });
       if (isDebugMode) {
         console.log(
           `### Main view (item: ${p(item)}, settings: ${p(settings)})`,
         );
       }
-      view = await toMainView({ view, item, ...components });
+      view = await toMainView(
+        { view, item, manualEntryPermitted, ...components },
+      );
     }
     try {
-      await components.slackApi.views.open({
-        trigger_id: interactivity_pointer,
-        view,
-      });
+      await components.slackApi.views.open(
+        { trigger_id: interactivity_pointer, view },
+      );
     } catch (e) {
       const error = `Failed to open a modal to <@${user_id}> (error: ${e})`;
       console.log(error);
@@ -131,6 +144,10 @@ export default SlackFunction(
       const components = await injectComponents({ ...args });
       const { user, slackApi } = components;
       try {
+        if (!await isManualEntryPermitted({ ...components })) {
+          // the organization policies do not allow manual inputs
+          return {};
+        }
         const projects = await fetchAllProjects({ ...components });
         const blocks = await newAddEntryBlocks({ projects, ...components });
         await slackApi.views.push({
@@ -162,15 +179,10 @@ export default SlackFunction(
           ActionId.ProjectCodeSearch,
         )?.selected_option?.value;
         const item = await fetchTimeEntry({ ...components });
-        const errors = validateTimeEntrySubmission({
-          type,
-          start,
-          end,
-          project_code,
-          item,
-          edit_target: undefined,
-          ...components,
-        });
+        const edit_target = undefined;
+        const errors = validateTimeEntrySubmission(
+          { type, start, end, project_code, item, edit_target, ...components },
+        );
         if (isDebugMode) {
           console.log(
             `### Main view (state.values: ${p(view.state.values)}, entry: ${
@@ -209,6 +221,9 @@ export default SlackFunction(
           await syncMainView({
             viewId: view.root_view_id,
             entryForTheDay: saved,
+            manualEntryPermitted: await isManualEntryPermitted({
+              ...components,
+            }),
             ...components,
           });
         }
@@ -252,9 +267,16 @@ export default SlackFunction(
           await syncMainView({
             viewId: body.view.id,
             entryForTheDay: saved,
+            manualEntryPermitted: await isManualEntryPermitted(
+              { ...components },
+            ),
             ...components,
           });
         } else {
+          if (!await isManualEntryPermitted({ ...components })) {
+            // the organization policies do not allow manual inputs
+            return {};
+          }
           // Open a new modal view to edit the entry
           const entry = deserializeTimeEntry(value.split("___")[1]);
           if (!entry || !entry.type) return {};
@@ -264,19 +286,14 @@ export default SlackFunction(
           if (!projectCodeEnabled) {
             projectCodeEnabled = await hasActiveProjects({ ...components });
           }
-          const blocks: AnyModalBlock[] = await newEditEntryBlocks({
-            entry,
-            projectCodeEnabled,
-            ...components,
-          });
+          const blocks: AnyModalBlock[] = await newEditEntryBlocks(
+            { entry, projectCodeEnabled, ...components },
+          );
           await slackApi.views.push({
             trigger_id: body.interactivity.interactivity_pointer,
-            view: newEditEntryView({
-              type: entry.type,
-              entry,
-              blocks,
-              ...components,
-            }),
+            view: newEditEntryView(
+              { type: entry.type, entry, blocks, ...components },
+            ),
           });
         }
         return {};
@@ -294,6 +311,10 @@ export default SlackFunction(
       const components = await injectComponents({ ...args });
       const { user } = components;
       try {
+        if (!await isManualEntryPermitted({ ...components })) {
+          // the organization policies do not allow manual inputs
+          return {};
+        }
         const start = stateValue(view, BlockId.Start)!.selected_time!;
         const end = stateValue(view, BlockId.End)?.selected_time || "";
         const project_code = stateValue(
@@ -306,15 +327,9 @@ export default SlackFunction(
         );
         const updatedEntry = serializeTimeEntry({ start, end, project_code });
         const item = await fetchTimeEntry({ ...components });
-        const errors = validateTimeEntrySubmission({
-          type,
-          start,
-          end,
-          project_code,
-          item,
-          edit_target,
-          ...components,
-        });
+        const errors = validateTimeEntrySubmission(
+          { type, start, end, project_code, item, edit_target, ...components },
+        );
         if (Object.keys(errors).length > 0) {
           return { response_action: "errors", errors };
         }
@@ -335,6 +350,9 @@ export default SlackFunction(
           await syncMainView({
             viewId: view.root_view_id,
             entryForTheDay: saved,
+            manualEntryPermitted: await isManualEntryPermitted({
+              ...components,
+            }),
             ...components,
           });
         }
@@ -373,16 +391,17 @@ export default SlackFunction(
           work_entries: item.work_entries ?? [],
         };
         attributes.work_entries!.push(
-          serializeTimeEntry({
-            start: nowHHMM(offset),
-            end: "",
-            project_code: undefined,
-          }),
+          serializeTimeEntry(
+            { start: nowHHMM(offset), end: "", project_code: undefined },
+          ),
         );
         const saved = await saveTimeEntry({ attributes, ...components });
         await syncMainView({
           viewId: body.view.id,
           entryForTheDay: saved,
+          manualEntryPermitted: await isManualEntryPermitted({
+            ...components,
+          }),
           ...components,
         });
         return {};
@@ -410,16 +429,17 @@ export default SlackFunction(
           user_and_date: item.user_and_date ?? `${user}-${yyyymmdd}`,
           work_entries: item.work_entries ?? [],
         };
-        const newEntry = serializeTimeEntry({
-          start: nowHHMM(offset),
-          end: "",
-          project_code,
-        });
+        const newEntry = serializeTimeEntry(
+          { start: nowHHMM(offset), end: "", project_code },
+        );
         attributes.work_entries!.push(newEntry);
         const saved = await saveTimeEntry({ attributes, ...components });
         await syncMainView({
           viewId: body.view.previous_view_id,
           entryForTheDay: saved,
+          manualEntryPermitted: await isManualEntryPermitted({
+            ...components,
+          }),
           ...components,
         });
         return {};
@@ -452,6 +472,9 @@ export default SlackFunction(
             await syncMainView({
               viewId: body.view.id,
               entryForTheDay: saved,
+              manualEntryPermitted: await isManualEntryPermitted({
+                ...components,
+              }),
               ...components,
             });
           }
@@ -476,15 +499,16 @@ export default SlackFunction(
           user_and_date: item.user_and_date ?? `${user}-${yyyymmdd}`,
           break_time_entries: item.break_time_entries ?? [],
         };
-        attributes.break_time_entries!.push(serializeTimeEntry({
-          start: nowHHMM(offset),
-          end: "",
-          project_code: undefined,
-        }));
+        attributes.break_time_entries!.push(serializeTimeEntry(
+          { start: nowHHMM(offset), end: "", project_code: undefined },
+        ));
         const saved = await saveTimeEntry({ attributes, ...components });
         await syncMainView({
           viewId: body.view.id,
           entryForTheDay: saved,
+          manualEntryPermitted: await isManualEntryPermitted({
+            ...components,
+          }),
           ...components,
         });
         return {};
@@ -518,6 +542,9 @@ export default SlackFunction(
               await syncMainView({
                 viewId: body.view.id,
                 entryForTheDay: saved,
+                manualEntryPermitted: await isManualEntryPermitted({
+                  ...components,
+                }),
                 ...components,
               });
             }
@@ -542,10 +569,12 @@ export default SlackFunction(
       const components = await injectComponents({ ...args });
       const { user } = components;
       try {
-        const saved = await fetchTimeEntry({ ...components });
         await syncMainView({
           viewId: body.view.id,
-          entryForTheDay: saved,
+          entryForTheDay: await fetchTimeEntry({ ...components }),
+          manualEntryPermitted: await isManualEntryPermitted({
+            ...components,
+          }),
           ...components,
         });
         return {};
@@ -566,7 +595,7 @@ export default SlackFunction(
       const { body: { interactivity, view }, action } = args;
       const trigger_id = interactivity.interactivity_pointer;
       const components = await injectComponents({ ...args });
-      const { slackApi, language, user, offset } = components;
+      const { slackApi, language, user, offset, op } = components;
       try {
         const selectedMenu: string = action.selected_option.value;
         if (selectedMenu === MenuItem.UserSettings) {
@@ -588,6 +617,9 @@ export default SlackFunction(
                 ...components,
                 yyyymmdd, // overrite
               }),
+              manualEntryPermitted: await isManualEntryPermitted({
+                ...components,
+              }),
               ...components,
               yyyymmdd, // overrite
             }),
@@ -607,6 +639,15 @@ export default SlackFunction(
             view: toProjectMainView({
               view: newView(language),
               projects: await fetchAllProjects({ ...components }),
+              ...components,
+            }),
+            trigger_id,
+          });
+        } else if (selectedMenu === MenuItem.OrganizationPolicies) {
+          await slackApi.views.push({
+            view: toOrganizationPoliciesView({
+              view: newView(language),
+              policies: (await op.findAll()).items,
               ...components,
             }),
             trigger_id,
@@ -635,17 +676,19 @@ export default SlackFunction(
       try {
         let country_id = "";
         const country = stateValue(view, BlockId.Country)?.selected_option;
-        if (country) {
-          country_id = country.value;
-        }
+        if (country) country_id = country.value;
         const attributes: Attributes<US> = { user, language, country_id };
         const saved = await saveUserSettings({ attributes, ...components });
         const entryForTheDay = await fetchTimeEntry({ ...components });
+        const manualEntryPermitted = await isManualEntryPermitted({
+          ...components,
+        });
         if (view.root_view_id !== view.id) {
           await syncMainView({
             viewId: view.root_view_id,
             entryForTheDay,
             ...components,
+            manualEntryPermitted,
             language: saved.language,
           });
           return {};
@@ -656,6 +699,7 @@ export default SlackFunction(
             view: await toMainView({
               view: newView(language),
               item: entryForTheDay,
+              manualEntryPermitted,
               ...components,
             }),
           };
@@ -688,6 +732,9 @@ export default SlackFunction(
               ...components,
               yyyymmdd, // overrite with the sent one
             }),
+            manualEntryPermitted: await isManualEntryPermitted({
+              ...components,
+            }),
             ...components,
             yyyymmdd, // overrite with the sent one
           }),
@@ -713,10 +760,9 @@ export default SlackFunction(
         const year = stateValue(view, BlockId.Year)!.selected_option!.value;
         const month = stateValue(view, BlockId.Month)!.selected_option!.value;
         const mm = ("00" + month).slice(-2);
-        const items = await fetchMonthTimeEntries({
-          yyyymm: `${year}${mm}`,
-          ...components,
-        });
+        const items = await fetchMonthTimeEntries(
+          { yyyymm: `${year}${mm}`, ...components },
+        );
         return {
           response_action: "update",
           view: await toReportResultView({
@@ -770,8 +816,9 @@ export default SlackFunction(
     async (args) => {
       const { body } = args;
       const components = await injectComponents({ ...args });
-      const { user, slackApi } = components;
+      const { user, slackApi, canAccessAdminFeature } = components;
       try {
+        if (!await canAccessAdminFeature()) return {};
         await slackApi.views.push({
           trigger_id: body.interactivity.interactivity_pointer,
           view: newAddProjectView({
@@ -792,8 +839,9 @@ export default SlackFunction(
     async (args) => {
       const { view } = args;
       const components = await injectComponents({ ...args });
-      const { user } = components;
+      const { user, canAccessAdminFeature } = components;
       try {
+        if (!await canAccessAdminFeature()) return {};
         const [code, name, description] = [
           stateValue(view, BlockId.ProjectCode)!.value!,
           stateValue(view, BlockId.ProjectName)!.value!,
@@ -818,15 +866,11 @@ export default SlackFunction(
         const saved = await saveProject({ attributes, ...components });
         const projects = await fetchAllProjects({ ...components });
         // To deal with the eventual consistency of datastore
-        if (!projects.find((p) => p.code === saved.code)) {
-          projects.push(saved);
-        }
+        if (!projects.find((p) => p.code === saved.code)) projects.push(saved);
         projects.sort((a, b) => a.code > b.code ? 1 : -1);
-        await syncProjectMainView({
-          viewId: view.previous_view_id,
-          projects,
-          ...components,
-        });
+        await syncProjectMainView(
+          { viewId: view.previous_view_id, projects, ...components },
+        );
         return {};
       } catch (e) {
         const error = `Failed to add a project (user: ${user}, error: ${e})`;
@@ -839,13 +883,12 @@ export default SlackFunction(
     async (args) => {
       const { body, action } = args;
       const components = await injectComponents({ ...args });
-      const { user, slackApi, language } = components;
+      const { user, slackApi, language, canAccessAdminFeature } = components;
       try {
+        if (!await canAccessAdminFeature()) return {};
         const code: string = action.value;
         const item = await fetchProject({ code, ...components });
-        if (!item.code) {
-          return {};
-        }
+        if (!item.code) return {};
         await slackApi.views.push({
           trigger_id: body.interactivity.interactivity_pointer,
           view: newEditProjectView({
@@ -867,8 +910,9 @@ export default SlackFunction(
     async (args) => {
       const { view } = args;
       const components = await injectComponents({ ...args });
-      const { user } = components;
+      const { user, canAccessAdminFeature } = components;
       try {
+        if (!await canAccessAdminFeature()) return {};
         const privateMetadata: EditProjectPrivateMetadata = JSON.parse(
           view.private_metadata || "{}",
         );
@@ -897,19 +941,14 @@ export default SlackFunction(
         const rows = await fetchAllProjects({ ...components });
         const projects: SavedAttributes<P>[] = [];
         for (let i = 0; i < rows.length; i++) {
-          if (rows[i].code === saved.code) {
-            projects.push(saved);
-          } else {
-            projects.push(rows[i]);
-          }
+          if (rows[i].code === saved.code) projects.push(saved);
+          else projects.push(rows[i]);
         }
         projects.sort((a, b) => a.code > b.code ? 1 : -1);
 
-        await syncProjectMainView({
-          viewId: view.previous_view_id,
-          projects,
-          ...components,
-        });
+        await syncProjectMainView(
+          { viewId: view.previous_view_id, projects, ...components },
+        );
         return {};
       } catch (e) {
         const error =
@@ -926,11 +965,9 @@ export default SlackFunction(
       const components = await injectComponents({ ...args });
       const { user, offset } = components;
       try {
-        const recentEntries = await fetchRecentTimeEntries({
-          limit: 100,
-          yyyymm: todayYYYYMMDD(offset),
-          ...components,
-        });
+        const recentEntries = await fetchRecentTimeEntries(
+          { limit: 100, yyyymm: todayYYYYMMDD(offset), ...components },
+        );
         const ranking: Record<string, number> = {};
         for (const entry of recentEntries) {
           for (const w of entry.work_entries) {
@@ -940,7 +977,6 @@ export default SlackFunction(
             }
           }
         }
-
         const allProjects = await fetchAllActiveProjects({ ...components });
         const matchedProjects = allProjects
           .filter((p) =>
@@ -965,6 +1001,49 @@ export default SlackFunction(
           `Failed to return search results (user: ${user}, error: ${e})`;
         console.log(error);
         return { options: [] };
+      }
+    },
+  )
+  // --------------------------------------------
+  // Organization Policies
+  // --------------------------------------------
+  .addBlockActionsHandler(
+    ActionId.OrganizationPolicyChange,
+    async (args) => {
+      const { body, action } = args;
+      const components = await injectComponents({ ...args });
+      const { user, slackApi, language, canAccessAdminFeature, op } =
+        components;
+      try {
+        if (!await canAccessAdminFeature()) return {};
+        console.log(action);
+        const [key, value] = action.selected_option.value.split("___");
+        if (!Object.keys(OrganizationPolices).includes(key)) {
+          return {};
+        }
+        await op.save({ attributes: { key, value } });
+        await slackApi.views.update({
+          view_id: body.view.id,
+          view: toOrganizationPoliciesView({
+            view: newView(language),
+            policies: (await op.findAll()).items,
+            ...components,
+          }),
+        });
+        await syncMainView({
+          viewId: body.view.previous_view_id,
+          entryForTheDay: await fetchTimeEntry({ ...components }),
+          manualEntryPermitted: await isManualEntryPermitted({ ...components }),
+          ...components,
+        });
+        return {};
+      } catch (e) {
+        const error =
+          `Failed to save organization policy change (user: ${user}, action: ${
+            p(action)
+          } error: ${e})`;
+        console.log(error);
+        return { error };
       }
     },
   );
