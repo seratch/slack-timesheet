@@ -41,6 +41,7 @@ import {
 } from "./reports.ts";
 import {
   ActionId,
+  AdminMenuItem,
   BlockId,
   CallbackId,
   Emoji,
@@ -120,6 +121,10 @@ export function TitleMain(language: string): PlainTextField {
   return buildTitle(i18n(Label.AppName, language));
 }
 
+// ----------------------
+// Time Entry
+// ----------------------
+
 export function TitleStartWorkWithProjectCode(
   language: string,
 ): PlainTextField {
@@ -133,8 +138,28 @@ export function TitleEditEntry(language: string): PlainTextField {
   return buildTitle(i18n(Label.EditEntry, language));
 }
 
+// ----------------------
+// Menu
+// ----------------------
+
+export function TitleUserSettings(language: string): PlainTextField {
+  return buildTitle(i18n(Label.UserSettings, language));
+}
+
 export function TitleMonthlyReport(language: string): PlainTextField {
   return buildTitle(i18n(Label.MonthlyReport, language));
+}
+
+// ----------------------
+// Admin Menu
+// ----------------------
+
+export function TitleAdminMenu(language: string): PlainTextField {
+  return buildTitle(i18n(Label.AdminMenu, language));
+}
+
+export function TitleAdminReportDownload(language: string): PlainTextField {
+  return buildTitle(i18n(Label.AdminReportDownload, language));
 }
 
 export function TitleProjectMain(language: string): PlainTextField {
@@ -151,11 +176,18 @@ export function TitleOrganizationPolicies(language: string): PlainTextField {
   return buildTitle(i18n(Label.OrganizationPolicies, language));
 }
 
+// ----------------------
+// Close/Submit buttons
+// ----------------------
+
 export function Back(language: string): PlainTextField {
   return { "type": "plain_text", "text": i18n(Label.Back, language) };
 }
-export function GenerateReport(language: string): PlainTextField {
-  return { "type": "plain_text", "text": i18n(Label.GenerateReport, language) };
+export function ReceiveReportInDM(language: string): PlainTextField {
+  return {
+    "type": "plain_text",
+    "text": i18n(Label.ReceiveReportInDM, language),
+  };
 }
 export function QuitThisApp(language: string): PlainTextField {
   return { "type": "plain_text", "text": i18n(Label.QuitApp, language) };
@@ -170,6 +202,10 @@ export function Save(language: string): PlainTextField {
   return { "type": "plain_text", "text": i18n(Label.Save, language) };
 }
 
+// ----------------------
+// Language options
+// ----------------------
+
 export const LanguageOptions: PlainTextOption[] = [
   {
     "text": { "type": "plain_text", "text": "English" },
@@ -180,6 +216,10 @@ export const LanguageOptions: PlainTextOption[] = [
     "value": "ja",
   },
 ];
+
+// ----------------------
+// Country options
+// ----------------------
 
 export function CountryOptions(
   coutries: SavedAttributes<C>[],
@@ -409,27 +449,30 @@ export async function mainViewBlocks({
     menuItems.push({
       "text": {
         "type": "plain_text",
-        "text": i18n(Label.MoveToToday, language),
+        "text": Emoji.BackToToday + " " + i18n(Label.BackToToday, language),
       },
-      "value": MenuItem.MoveToToday,
+      "value": MenuItem.BackToToday,
     });
   }
 
   menuItems.push({
-    "text": { "type": "plain_text", "text": i18n(Label.Calendar, language) },
+    "text": {
+      "type": "plain_text",
+      "text": Emoji.Calendar + " " + i18n(Label.Calendar, language),
+    },
     "value": MenuItem.Calendar,
   });
   menuItems.push({
     "text": {
       "type": "plain_text",
-      "text": i18n(Label.MonthlyReport, language),
+      "text": Emoji.MonthlyReport + " " + i18n(Label.MonthlyReport, language),
     },
     "value": MenuItem.MonthlyReport,
   });
   menuItems.push({
     "text": {
       "type": "plain_text",
-      "text": i18n(Label.UserSettings, language),
+      "text": Emoji.UserSettings + " " + i18n(Label.UserSettings, language),
     },
     "value": MenuItem.UserSettings,
   });
@@ -438,16 +481,9 @@ export async function mainViewBlocks({
     menuItems.push({
       "text": {
         "type": "plain_text",
-        "text": i18n(Label.ProjectSettings, language),
+        "text": Emoji.AdminOnly + " " + i18n(Label.AdminMenu, language),
       },
-      "value": MenuItem.ProjectSettings,
-    });
-    menuItems.push({
-      "text": {
-        "type": "plain_text",
-        "text": i18n(Label.OrganizationPolicies, language),
-      },
-      "value": MenuItem.OrganizationPolicies,
+      "value": MenuItem.AdminMenu,
     });
   }
 
@@ -525,8 +561,9 @@ export async function mainViewBlocks({
     },
   });
 
-  topBlocks.push({ "type": "divider" });
-
+  if (entryBlocks.length > 0) {
+    topBlocks.push({ "type": "divider" });
+  }
   if (isToday) {
     if (businessHours) {
       if (breakTime) {
@@ -633,6 +670,7 @@ export function toUserSettingsView({
   country,
 }: toUserSettingsViewArgs): ModalView {
   view.callback_id = CallbackId.UserSettings;
+  view.title = TitleUserSettings(language);
   view.submit = Save(language);
   view.close = Back(language);
   let selectedLanguage = LanguageOptions.find((l) =>
@@ -706,6 +744,7 @@ export function toStartWorkWithProjectCodeView({
   });
   return view;
 }
+
 // -----------------------------------------
 // Calendar view
 // -----------------------------------------
@@ -752,8 +791,7 @@ export function toReportStartView({
   view.callback_id = CallbackId.ReportStart;
   view.title = TitleMonthlyReport(language);
   view.close = Back(language);
-  view.submit = GenerateReport(language);
-
+  view.submit = Next(language);
   const currentYear = Number.parseInt(yyyymmdd.substring(0, 4));
   const years: PlainTextOption[] = [];
   for (let i = -20; i < 20; i++) {
@@ -763,7 +801,31 @@ export function toReportStartView({
       value: year.toString(),
     });
   }
-  view.blocks.push({
+  reportStartBlocks(
+    { language, offset, blocks: view.blocks },
+  );
+  return view;
+}
+
+interface reportStartBlocksArgs {
+  language: string;
+  offset: number;
+  blocks: AnyModalBlock[];
+}
+function reportStartBlocks(
+  { language, offset, blocks }: reportStartBlocksArgs,
+) {
+  const yyyymmdd = todayYYYYMMDD(offset);
+  const currentYear = Number.parseInt(yyyymmdd.substring(0, 4));
+  const years: PlainTextOption[] = [];
+  for (let i = -20; i < 20; i++) {
+    const year = currentYear + i;
+    years.push({
+      text: { type: "plain_text", text: year.toString() },
+      value: year.toString(),
+    });
+  }
+  blocks.push({
     "type": "input",
     "block_id": BlockId.Year,
     "label": { "type": "plain_text", "text": i18n(Label.Year, language) },
@@ -785,7 +847,7 @@ export function toReportStartView({
       value: i.toString(),
     });
   }
-  view.blocks.push({
+  blocks.push({
     "type": "input",
     "block_id": BlockId.Month,
     "label": { "type": "plain_text", "text": i18n(Label.Month, language) },
@@ -799,13 +861,13 @@ export function toReportStartView({
       },
     },
   });
-  return view;
 }
 
 interface toReportResultViewArgs {
   view: ModalView;
-  user_id: string;
   month: string;
+  user: string;
+  email: string;
   items: SavedAttributes<TE>[];
   offset: number;
   language: string;
@@ -814,7 +876,8 @@ interface toReportResultViewArgs {
 }
 export async function toReportResultView({
   view,
-  user_id,
+  user,
+  email,
   month,
   items,
   offset,
@@ -823,7 +886,8 @@ export async function toReportResultView({
   isDebugMode,
 }: toReportResultViewArgs): Promise<ModalView> {
   const report: MonthlyReport = await generateReport({
-    userId: user_id,
+    user,
+    email,
     month,
     items,
     offset,
@@ -856,7 +920,7 @@ export async function toReportResultView({
         "type": "plain_text",
         "text": i18n(Label.SendThisInDM, language),
       },
-      "value": JSON.stringify({ "user_id": user_id, "month": month }),
+      "value": JSON.stringify({ "user_id": user, "month": month }),
     },
   });
   view.blocks.push({ "type": "divider" });
@@ -937,6 +1001,29 @@ export async function newAddEntryBlocks({
   const time = nowHHMM(offset);
   const isHoliday = ((await holidays())?.holidays || []).includes(yyyymmdd);
   const emoji = isHoliday ? Emoji.Holiday : clockEmoji(time);
+  const entryTypeOptions: PlainTextOption[] = [
+    {
+      "text": {
+        "type": "plain_text",
+        "text": Emoji.Work + " " + i18n(Label.Work, language),
+      },
+      "value": EntryType.Work,
+    },
+    {
+      "text": {
+        "type": "plain_text",
+        "text": Emoji.BreakTime + " " + i18n(Label.BreakTime, language),
+      },
+      "value": EntryType.BreakTime,
+    },
+    {
+      "text": {
+        "type": "plain_text",
+        "text": Emoji.TimeOff + " " + i18n(Label.TimeOff, language),
+      },
+      "value": EntryType.TimeOff,
+    },
+  ];
   const blocks: AnyModalBlock[] = [
     {
       "type": "section",
@@ -956,29 +1043,8 @@ export async function newAddEntryBlocks({
       "element": {
         "type": "radio_buttons",
         "action_id": ActionId.Input,
-        "options": [
-          {
-            "text": {
-              "type": "plain_text",
-              "text": Emoji.Work + " " + i18n(Label.Work, language),
-            },
-            "value": EntryType.Work,
-          },
-          {
-            "text": {
-              "type": "plain_text",
-              "text": Emoji.BreakTime + " " + i18n(Label.BreakTime, language),
-            },
-            "value": EntryType.BreakTime,
-          },
-          {
-            "text": {
-              "type": "plain_text",
-              "text": Emoji.TimeOff + " " + i18n(Label.TimeOff, language),
-            },
-            "value": EntryType.TimeOff,
-          },
-        ],
+        "options": entryTypeOptions,
+        "initial_option": entryTypeOptions[0],
       },
     },
     {
@@ -1022,7 +1088,23 @@ interface newEditEntryBlocksArgs {
 export async function newEditEntryBlocks(
   { p, entry, language, projectCodeEnabled }: newEditEntryBlocksArgs,
 ) {
+  let workTypeLabel = " ";
+  if (entry.type === EntryType.Work) {
+    workTypeLabel = Emoji.Work + " " + i18n(Label.Work, language);
+  } else if (entry.type === EntryType.BreakTime) {
+    workTypeLabel = Emoji.BreakTime + " " + i18n(Label.BreakTime, language);
+  } else if (entry.type === EntryType.TimeOff) {
+    workTypeLabel = Emoji.TimeOff + " " + i18n(Label.TimeOff, language);
+  }
   const blocks: AnyModalBlock[] = [
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*" + workTypeLabel + "*",
+      },
+    },
+    { "type": "divider" },
     {
       "type": "input",
       "block_id": BlockId.Start,
@@ -1071,6 +1153,57 @@ export async function newEditEntryBlocks(
     });
   }
   return blocks;
+}
+
+// -----------------------------------------
+// Admin Menu view
+// -----------------------------------------
+
+interface toAdminMenuViewArgs {
+  view: ModalView;
+  language: string;
+}
+export function toAdminMenuView({
+  view,
+  language,
+}: toAdminMenuViewArgs): ModalView {
+  view.callback_id = CallbackId.AdminMenu;
+  view.title = TitleAdminMenu(language);
+  view.close = Back(language);
+  view.blocks.push({
+    "type": "actions",
+    "block_id": BlockId.AdminMenu,
+    "elements": [
+      {
+        "type": "static_select",
+        "action_id": ActionId.AdminMenu,
+        "options": [
+          {
+            text: {
+              type: "plain_text",
+              text: i18n(Label.AdminReportDownload, language),
+            },
+            value: AdminMenuItem.AdminReportDownload,
+          },
+          {
+            text: {
+              type: "plain_text",
+              text: i18n(Label.OrganizationPolicies, language),
+            },
+            value: AdminMenuItem.OrganizationPolicies,
+          },
+          {
+            text: {
+              type: "plain_text",
+              text: i18n(Label.ProjectSettings, language),
+            },
+            value: AdminMenuItem.ProjectSettings,
+          },
+        ],
+      },
+    ],
+  });
+  return view;
 }
 
 // -----------------------------------------
@@ -1337,7 +1470,7 @@ export function newEditProjectView({
 }
 
 // -----------------------------------------
-// Time Entry view
+// Organization Policies view
 // -----------------------------------------
 
 interface toOrganizationPoliciesViewArgs {
@@ -1381,5 +1514,58 @@ export function toOrganizationPoliciesView({
       },
     });
   }
+  return view;
+}
+
+// -----------------------------------------
+// Admin Report Download view
+// -----------------------------------------
+
+interface toAdminReportDownloadViewArgs {
+  view: ModalView;
+  offset: number;
+  language: string;
+}
+export function toAdminReportDownloadView({
+  view,
+  offset,
+  language,
+}: toAdminReportDownloadViewArgs): ModalView {
+  view.callback_id = CallbackId.AdminReportDownload;
+  view.title = TitleAdminReportDownload(language);
+  view.submit = ReceiveReportInDM(language);
+  view.close = Back(language);
+
+  const yyyymmdd = todayYYYYMMDD(offset);
+  const currentYear = Number.parseInt(yyyymmdd.substring(0, 4));
+  const years: PlainTextOption[] = [];
+  for (let i = -20; i < 20; i++) {
+    const year = currentYear + i;
+    years.push({
+      text: { type: "plain_text", text: year.toString() },
+      value: year.toString(),
+    });
+  }
+  reportStartBlocks(
+    { language, offset, blocks: view.blocks },
+  );
+  return view;
+}
+
+interface toAdminReportDownloadCompletionViewArgs {
+  view: ModalView;
+  language: string;
+  message: string;
+}
+export function toAdminReportDownloadCompletionView(
+  { view, language, message }: toAdminReportDownloadCompletionViewArgs,
+): ModalView {
+  view.callback_id = CallbackId.AdminReportDownload;
+  view.title = TitleAdminReportDownload(language);
+  view.close = Back(language);
+  view.blocks.push({
+    "type": "section",
+    "text": { "type": "mrkdwn", "text": message },
+  });
   return view;
 }

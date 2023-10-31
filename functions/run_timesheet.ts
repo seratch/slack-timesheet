@@ -5,17 +5,24 @@ import { AnyModalBlock, ModalView } from "slack-web-api-client/mod.ts";
 import { injectComponents } from "./internals/components.ts";
 import {
   ActionId,
+  AdminMenuItem,
   BlockId,
   CallbackId,
   EntryType,
+  Label,
   MenuItem,
 } from "./internals/constants.ts";
 import {
   generateReport,
   MonthlyReport,
+  shareAdminReportJSONFile,
   shareReportJSONFile,
 } from "./internals/reports.ts";
-import { nowHHMM, todayYYYYMMDD } from "./internals/datetime.ts";
+import {
+  nowHHMM,
+  todayForDatepicker,
+  todayYYYYMMDD,
+} from "./internals/datetime.ts";
 import {
   newAddEntryBlocks,
   newAddEntryView,
@@ -29,6 +36,9 @@ import {
   stateValue,
   syncMainView,
   syncProjectMainView,
+  toAdminMenuView,
+  toAdminReportDownloadCompletionView,
+  toAdminReportDownloadView,
   toCalendarView,
   toMainView,
   toOrganizationPoliciesView,
@@ -42,11 +52,13 @@ import {
   deserializeTimeEntry,
   fetchAllActiveProjects,
   fetchAllCountries,
+  fetchAllMemberMonthTimeEntries,
   fetchAllProjects,
   fetchMonthTimeEntries,
   fetchProject,
   fetchRecentTimeEntries,
   fetchTimeEntry,
+  fetchUserDetails,
   hasActiveProjects,
   P,
   saveProject,
@@ -69,6 +81,7 @@ import {
   isManualEntryPermitted,
   OrganizationPolices,
 } from "./internals/organization_policies.ts";
+import { i18n } from "./internals/i18n.ts";
 
 export const def = DefineFunction({
   callback_id: "run_timesheet",
@@ -594,7 +607,7 @@ export default SlackFunction(
       const { body: { interactivity, view }, action } = args;
       const trigger_id = interactivity.interactivity_pointer;
       const components = await injectComponents({ ...args });
-      const { slackApi, language, user, offset, op } = components;
+      const { slackApi, language, user, offset } = components;
       try {
         const selectedMenu: string = action.selected_option.value;
         if (selectedMenu === MenuItem.UserSettings) {
@@ -606,7 +619,7 @@ export default SlackFunction(
               ...components,
             }),
           });
-        } else if (selectedMenu === MenuItem.MoveToToday) {
+        } else if (selectedMenu === MenuItem.BackToToday) {
           const yyyymmdd = todayYYYYMMDD(offset);
           await slackApi.views.update({
             view_id: view.id,
@@ -633,22 +646,9 @@ export default SlackFunction(
             view: toReportStartView({ view: newView(language), ...components }),
             trigger_id,
           });
-        } else if (selectedMenu === MenuItem.ProjectSettings) {
+        } else if (selectedMenu === MenuItem.AdminMenu) {
           await slackApi.views.push({
-            view: toProjectMainView({
-              view: newView(language),
-              projects: await fetchAllProjects({ ...components }),
-              ...components,
-            }),
-            trigger_id,
-          });
-        } else if (selectedMenu === MenuItem.OrganizationPolicies) {
-          await slackApi.views.push({
-            view: toOrganizationPoliciesView({
-              view: newView(language),
-              policies: (await op.findAll()).items,
-              ...components,
-            }),
+            view: toAdminMenuView({ view: newView(language), ...components }),
             trigger_id,
           });
         }
@@ -752,7 +752,7 @@ export default SlackFunction(
   .addViewSubmissionHandler(
     CallbackId.ReportStart,
     async (args) => {
-      const { view, inputs: { user_id } } = args;
+      const { view } = args;
       const components = await injectComponents({ ...args });
       const { user, language } = components;
       try {
@@ -767,7 +767,6 @@ export default SlackFunction(
           view: await toReportResultView({
             view: newView(language),
             items,
-            user_id,
             month: `${year}/${mm}`,
             ...components,
           }),
@@ -782,7 +781,7 @@ export default SlackFunction(
   ).addBlockActionsHandler(
     ActionId.SendReportInDM,
     async (args) => {
-      const { body, inputs: { user_id } } = args;
+      const { body } = args;
       const components = await injectComponents({ ...args });
       const { user } = components;
       try {
@@ -790,7 +789,6 @@ export default SlackFunction(
           body.view.private_metadata,
         );
         const report: MonthlyReport = await generateReport({
-          userId: user_id,
           month: yyyymmdd.substring(0, 4) + "/" + yyyymmdd.substring(4, 6),
           items: (await fetchMonthTimeEntries({
             yyyymm: yyyymmdd.substring(0, 6),
@@ -798,12 +796,131 @@ export default SlackFunction(
           })),
           ...components,
         });
-        await shareReportJSONFile({ report, user_id, ...components });
+        await shareReportJSONFile({ report, ...components });
         return {};
       } catch (e) {
         const error = `Failed to send a report (user: ${user}, error: ${e})`;
         console.log(error);
         return { error };
+      }
+    },
+  )
+  // --------------------------------------------
+  // Admin Menu
+  // --------------------------------------------
+  .addBlockActionsHandler(
+    ActionId.AdminMenu,
+    async (args) => {
+      const { body: { view }, action } = args;
+      const components = await injectComponents({ ...args });
+      const { slackApi, language, user, op } = components;
+      try {
+        const selectedMenu: string = action.selected_option.value;
+        if (selectedMenu === AdminMenuItem.AdminReportDownload) {
+          await slackApi.views.update({
+            view_id: view.id,
+            view: toAdminReportDownloadView({
+              view: newView(language),
+              ...components,
+            }),
+          });
+        } else if (selectedMenu === AdminMenuItem.ProjectSettings) {
+          await slackApi.views.update({
+            view_id: view.id,
+            view: toProjectMainView({
+              view: newView(language),
+              projects: await fetchAllProjects({ ...components }),
+              ...components,
+            }),
+          });
+        } else if (selectedMenu === AdminMenuItem.OrganizationPolicies) {
+          await slackApi.views.update({
+            view_id: view.id,
+            view: toOrganizationPoliciesView({
+              view: newView(language),
+              policies: (await op.findAll()).items,
+              ...components,
+            }),
+          });
+        }
+        return {};
+      } catch (e) {
+        const error =
+          `Failed to handle menu event (user: ${user}, error: ${e})`;
+        console.log(error);
+        return { error };
+      }
+    },
+  ).addViewSubmissionHandler(
+    CallbackId.AdminReportDownload,
+    async (args) => {
+      const { view, inputs: { user_id } } = args;
+      const components = await injectComponents({ ...args });
+      const { user, offset, language } = components;
+      try {
+        const year = stateValue(view, BlockId.Year)!.selected_option!.value;
+        const month = stateValue(view, BlockId.Month)!.selected_option!.value;
+        const mm = ("00" + month).slice(-2);
+        const userToItems = await fetchAllMemberMonthTimeEntries({
+          yyyymm: `${year}${mm}`,
+          ...components,
+        });
+        const tasks: Promise<MonthlyReport>[] = [];
+        for (const [reportUser, items] of Object.entries(userToItems)) {
+          tasks.push(
+            new Promise((resolve, reject) => {
+              fetchUserDetails(components.slackApi, reportUser)
+                .then(async (userInfo) => {
+                  const reportUserEmail = userInfo.user?.profile?.email;
+                  if (reportUserEmail) {
+                    try {
+                      const report = await generateReport({
+                        month,
+                        items,
+                        ...components,
+                        user: reportUser, // override the components
+                        email: reportUserEmail, // override the components
+                      });
+                      resolve(report);
+                    } catch (e) {
+                      reject(e);
+                    }
+                  }
+                });
+            }),
+          );
+        }
+        const userReports: MonthlyReport[] = await Promise.all(tasks);
+        const report = {
+          month,
+          reports: userReports,
+          generated_at: todayForDatepicker(offset) + " " + nowHHMM(offset),
+        };
+        await shareAdminReportJSONFile({
+          adminUserId: user_id,
+          report,
+          ...components,
+        });
+        return {
+          response_action: "update",
+          view: toAdminReportDownloadCompletionView({
+            view: newView(language),
+            message: i18n(Label.ReportHasBeenSentInDM, language),
+            ...components,
+          }),
+        };
+      } catch (e) {
+        const error =
+          `Failed to send an admin report (user: ${user}, error: ${e})`;
+        console.log(error);
+        return {
+          response_action: "update",
+          view: toAdminReportDownloadCompletionView({
+            view: newView(language),
+            message: i18n(Label.ReportHasBeenSentInDM, language),
+            ...components,
+          }),
+        };
       }
     },
   )
