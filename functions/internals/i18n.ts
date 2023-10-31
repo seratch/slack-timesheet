@@ -6,7 +6,6 @@ labels[Label.AddEntry] = { "ja": "自由入力" };
 labels[Label.EditEntry] = { "ja": "入力編集" };
 labels[Label.Back] = { "ja": "戻る" };
 labels[Label.Next] = { "ja": "次へ" };
-labels[Label.GenerateReport] = { "ja": "レポートを作成する" };
 labels[Label.QuitApp] = { "ja": "アプリを終了する" };
 labels[Label.Submit] = { "ja": "送信する" };
 labels[Label.Save] = { "ja": "保存する" };
@@ -18,16 +17,18 @@ labels[Label.Work] = { "ja": "勤務" };
 labels[Label.BreakTime] = { "ja": "休憩" };
 labels[Label.TimeOff] = { "ja": "休暇" };
 labels[Label.Holiday] = { "ja": "祝日" };
-labels[Label.MoveToToday] = { "ja": "今日の画面へ移動" };
+labels[Label.BackToToday] = { "ja": "今日の画面へ移動" };
 labels[Label.UserSettings] = { "ja": "ユーザー設定" };
 labels[Label.Calendar] = { "ja": "カレンダー" };
 labels[Label.MonthlyReport] = { "ja": "月次レポート" };
+labels[Label.AdminMenu] = { "ja": "管理者メニュー" };
+labels[Label.ProjectSettings] = { "ja": "プロジェクト設定" };
 labels[Label.OrganizationPolicies] = { "ja": "組織ポリシー" };
+labels[Label.AdminReportDownload] = { "ja": "管理者向けレポートダウンロード" };
 labels[Label.ProjectMain] = { "ja": "プロジェクト" };
 labels[Label.ProjectSummary] = { "ja": "プロジェクトのサマリー" };
 labels[Label.AddProject] = { "ja": "プロジェクト追加" };
 labels[Label.EditProject] = { "ja": "プロジェクト編集" };
-labels[Label.ProjectSettings] = { "ja": "プロジェクト設定" };
 labels[Label.StartWork] = { "ja": "勤務開始" };
 labels[Label.FinishWork] = { "ja": "勤務終了" };
 labels[Label.StartBreakTime] = { "ja": "休憩開始" };
@@ -43,6 +44,7 @@ labels[Label.InputType] = { "ja": "種別" };
 labels[Label.Year] = { "ja": "年" };
 labels[Label.Month] = { "ja": "月" };
 labels[Label.SendThisInDM] = { "ja": "このレポートを DM で送る" };
+labels[Label.ReceiveReportInDM] = { "ja": "レポートを DM で受け取る" };
 labels[Label.HereIsTheReportYouRequested] = {
   "ja": "こちらがご希望の月次レポートです！",
 };
@@ -59,6 +61,13 @@ labels[Label.InvalidStartAndEnd] = {
 labels[Label.ProjectMainPageGuide] = {
   "ja":
     ":wave: 管理者はこのページでプロジェクトを管理できます。一つ以上有効なコードがある場合、ユーザーは勤務登録時に指定するよう促されます。",
+};
+labels[Label.ReportHasBeenSentInDM] = {
+  "ja": ":wave: 作成したレポートを DM でお送りしました！",
+};
+labels[Label.FailedToGenerateReport] = {
+  "ja":
+    ":x: レポートの作成に失敗しました。このアプリのメンテナーにご連絡ください。",
 };
 labels[Label.ProjectCode] = { "ja": "プロジェクトコード" };
 labels[Label.ProjectName] = { "ja": "プロジェクト名" };

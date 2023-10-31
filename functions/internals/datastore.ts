@@ -109,6 +109,28 @@ export async function fetchMonthTimeEntries({
   return items;
 }
 
+export async function fetchAllMemberMonthTimeEntries(
+  { te, yyyymm }: fetchMonthTimeEntriesArgs,
+): Promise<Record<string, SavedAttributes<TE>[]>> {
+  const where = {
+    user_and_date: {
+      value: `-${yyyymm}`,
+      operator: Operator.Contains,
+    },
+  };
+  const allEntries = await te.findAllBy({ where });
+  const allItems = allEntries.items.sort((a, b) => {
+    if (!a.user_and_date || !b.user_and_date) return 0;
+    return a.user_and_date > b.user_and_date ? 1 : -1;
+  });
+  const result: Record<string, SavedAttributes<TE>[]> = {};
+  for (const item of allItems) {
+    const user = item.user_and_date!.split("-")[0];
+    result[user] = result[user] || [];
+    result[user].push(item);
+  }
+  return result;
+}
 interface fetchRecentTimeEntriesArgs {
   te: DataMapper<TE>;
   user: string;

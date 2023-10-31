@@ -47,6 +47,7 @@ export interface Components {
   op: DataMapper<OP>;
   au: DataMapper<AU>;
   user: string;
+  email: string;
   settings: SavedAttributes<US>;
   holidays: () => Promise<SavedAttributes<PH> | undefined>;
   yyyymmdd: string;
@@ -70,8 +71,14 @@ export async function injectComponents(
   const slackApi = new SlackAPI(token, { logLevel });
   const user = user_id;
   const userInfo = await fetchUserDetails(slackApi, user_id);
-  const timeOffset = userInfo.user?.tz_offset || 0;
-  const locale = userInfo.user?.locale;
+  if (!userInfo.user) {
+    throw new Error(
+      `Unexpectedly failed to fetch users.info data! (user: ${user_id})`,
+    );
+  }
+  const timeOffset = userInfo.user.tz_offset || 0;
+  const email = userInfo.user.profile!.email!;
+  const locale = userInfo.user.locale;
   const { yyyymmdd }: PrivateMetadata = JSON.parse(
     body?.view?.private_metadata || "{}",
   );
@@ -110,6 +117,7 @@ export async function injectComponents(
     slackApi,
     us,
     user,
+    email,
     locale,
     language,
     country,

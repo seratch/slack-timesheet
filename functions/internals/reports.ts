@@ -40,9 +40,16 @@ export interface DailyReport {
   projects: ProjectWork[] | undefined;
 }
 
+export interface AdminMonthlyReport {
+  month: string;
+  reports: MonthlyReport[];
+  generated_at: string;
+}
+
 export interface MonthlyReport {
   month: string;
   user_id: string;
+  user_email: string;
   holidays: number;
   entry_hours: number;
   work_hours: number;
@@ -57,7 +64,8 @@ export interface MonthlyReport {
 }
 
 interface generateReportArgs {
-  userId: string;
+  user: string;
+  email: string;
   month: string;
   items: SavedAttributes<TE>[];
   offset: number;
@@ -65,7 +73,8 @@ interface generateReportArgs {
   holidays: () => Promise<SavedAttributes<PH> | undefined>;
 }
 export async function generateReport({
-  userId,
+  user,
+  email,
   month,
   items,
   offset,
@@ -77,7 +86,8 @@ export async function generateReport({
   const numOfHolidays = days.filter((h) => h.startsWith(yyyymm)).length || 0;
   const report: MonthlyReport = {
     month,
-    user_id: userId,
+    user_id: user,
+    user_email: email,
     holidays: numOfHolidays,
     entry_hours: 0,
     work_hours: 0,
@@ -350,7 +360,7 @@ import {
 
 interface shareReportJSONFileArgs {
   report: MonthlyReport;
-  user_id: string;
+  user: string;
   language: string;
   yyyymmdd: string;
   slackApi: SlackAPIClient;
@@ -358,7 +368,7 @@ interface shareReportJSONFileArgs {
 export async function shareReportJSONFile({
   report,
   language,
-  user_id,
+  user,
   yyyymmdd,
   slackApi,
 }: shareReportJSONFileArgs) {
@@ -369,7 +379,7 @@ export async function shareReportJSONFile({
     [],
     language,
   ) as AnyMessageBlock[];
-  const filename = `${user_id}-${yyyymmdd.substring(0, 6)}.json`;
+  const filename = `${user}-${yyyymmdd.substring(0, 6)}.json`;
   const uploadUrl = await slackApi.files.getUploadURLExternal({
     filename,
     length: jsonBytes.length,
@@ -390,7 +400,7 @@ export async function shareReportJSONFile({
   });
   const fileUrl = completion.files![0].permalink;
   await slackApi.chat.postMessage({
-    channel: user_id,
+    channel: user,
     text: `Here is the monthly report's JSON file: ${fileUrl}`,
     blocks,
   });
@@ -474,4 +484,47 @@ ${summary.join("\n")}
     });
   }
   return blocks;
+}
+
+interface shareAdminReportJSONFileArgs {
+  report: AdminMonthlyReport;
+  adminUserId: string;
+  language: string;
+  yyyymmdd: string;
+  slackApi: SlackAPIClient;
+}
+export async function shareAdminReportJSONFile({
+  report,
+  language,
+  adminUserId,
+  yyyymmdd,
+  slackApi,
+}: shareAdminReportJSONFileArgs) {
+  const json: string = JSON.stringify(report);
+  const jsonBytes: Uint8Array = new TextEncoder().encode(json);
+  const filename = `all-members-${yyyymmdd.substring(0, 6)}.json`;
+  const uploadUrl = await slackApi.files.getUploadURLExternal({
+    filename,
+    length: jsonBytes.length,
+    snippet_type: "json",
+  });
+  const { upload_url, file_id } = uploadUrl;
+  const upload = await fetch(upload_url!, {
+    method: "POST",
+    body: jsonBytes,
+  });
+  if (upload.status !== 200) {
+    const error = `Failed to upload a JSON file (response: ${upload})`;
+    console.log(error);
+    return { error };
+  }
+  const completion = await slackApi.files.completeUploadExternal({
+    files: [{ "id": file_id!, "title": filename }],
+  });
+  const fileUrl = completion.files![0].permalink;
+  const message = i18n(Label.HereIsTheReportYouRequested, language);
+  await slackApi.chat.postMessage({
+    channel: adminUserId,
+    text: `:wave: ${message} ${fileUrl}`,
+  });
 }

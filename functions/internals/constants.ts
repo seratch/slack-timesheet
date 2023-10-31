@@ -7,10 +7,12 @@ export class CallbackId {
   static Calendar = "calendar";
   static ReportStart = "report_start";
   static ReportResult = "report_result";
+  static AdminMenu = "admin_menu";
   static ProjectMainView = "project_main_view";
   static AddProject = "add_project";
   static EditProjct = "edit_project";
   static OrganizationPolicies = "organization_policies";
+  static AdminReportDownload = "admin_report_download";
 }
 
 export class BlockId {
@@ -22,6 +24,7 @@ export class BlockId {
   static Type = "type";
   static Start = "start";
   static End = "end";
+  static AdminMenu = "admin_menu";
   static ProjectCode = "code";
   static ProjectName = "name";
   static ProjectIsActive = "is_active";
@@ -42,18 +45,24 @@ export class ActionId {
   static StartWork = "start_work";
   static FinishWork = "finish_work";
   static Refresh = "refresh";
+  static AdminMenu = "admin_menu";
   static AddProject = "add_project";
   static EditProject = "edit_project";
   static OrganizationPolicyChange = "organization_policy_change";
 }
 
 export class MenuItem {
-  static MoveToToday = "move_to_today";
+  static BackToToday = "back_to_today";
   static UserSettings = "user_settings";
   static Calendar = "calendar";
   static MonthlyReport = "monthly_report";
-  static ProjectSettings = "project_settings";
+  static AdminMenu = "admin_menu";
+}
+
+export class AdminMenuItem {
+  static AdminReportDownload = "admin_report_download";
   static OrganizationPolicies = "organization_policies";
+  static ProjectSettings = "project_settings";
 }
 
 export class Emoji {
@@ -64,6 +73,11 @@ export class Emoji {
   static ActiveProject = ":white_check_mark:";
   static SuspendedProject = ":ballot_box_with_check:";
   static Refresh = ":arrows_counterclockwise:";
+  static BackToToday = ":leftwards_arrow_with_hook:";
+  static Calendar = ":calendar:";
+  static MonthlyReport = ":bookmark_tabs:";
+  static UserSettings = ":gear:";
+  static AdminOnly = ":lock:";
 }
 
 export class Label {
@@ -72,7 +86,6 @@ export class Label {
   static EditEntry = "Edit Entry";
   static Back = "Back";
   static Next = "Next";
-  static GenerateReport = "Generate Report";
   static QuitApp = "Quit App";
   static Submit = "Submit";
   static Save = "Save";
@@ -84,16 +97,18 @@ export class Label {
   static BreakTime = "Break time";
   static TimeOff = "Time off";
   static Holiday = "Holiday";
-  static MoveToToday = "Today";
+  static BackToToday = "Today";
   static UserSettings = "User Settings";
   static Calendar = "Calendar";
   static MonthlyReport = "Monthly Report";
+  static AdminMenu = "Admin Menu";
   static ProjectMain = "Projects";
   static ProjectSummary = "Project Summary";
   static AddProject = "Add Project";
   static EditProject = "Edit Project";
   static ProjectSettings = "Project Settings";
   static OrganizationPolicies = "Organization Policies";
+  static AdminReportDownload = "Admin Report Download";
   static StartWork = "Start work";
   static FinishWork = "Finish work";
   static StartBreakTime = "Start break time";
@@ -109,6 +124,7 @@ export class Label {
   static Month = "Month";
   static Date = "Date";
   static SendThisInDM = "Send this in DM";
+  static ReceiveReportInDM = "Receive report in DM";
   static HereIsTheReportYouRequested =
     "Here is the monthly report you requested!";
   static days = "days";
@@ -130,6 +146,10 @@ export class Label {
   static ProjectCodeTextValidationError =
     "A project code can consist of alphanumeric characters, dashes (-), and underscores(_).";
   static CodeAlreadyExists = "The code already exists";
+  static ReportHasBeenSentInDM =
+    ":wave: The report file has been sent to you in DM!";
+  static FailedToGenerateReport =
+    ":x: Failed to generate a report for you! Please contact the maintainers of this app.";
   static ManualEntryPermitted = "Manual Entry Permitted";
   static OrganizationPolicyValue_Permitted = "Permitted";
   static OrganizationPolicyValue_Restricted = "Restricted";
