@@ -607,7 +607,8 @@ export default SlackFunction(
       const { body: { interactivity, view }, action } = args;
       const trigger_id = interactivity.interactivity_pointer;
       const components = await injectComponents({ ...args });
-      const { slackApi, language, user, offset } = components;
+      const { slackApi, language, user, offset, canAccessAdminFeature } =
+        components;
       try {
         const selectedMenu: string = action.selected_option.value;
         if (selectedMenu === MenuItem.UserSettings) {
@@ -647,6 +648,7 @@ export default SlackFunction(
             trigger_id,
           });
         } else if (selectedMenu === MenuItem.AdminMenu) {
+          if (!await canAccessAdminFeature()) return {};
           await slackApi.views.push({
             view: toAdminMenuView({ view: newView(language), ...components }),
             trigger_id,
@@ -813,8 +815,10 @@ export default SlackFunction(
     async (args) => {
       const { body: { view }, action } = args;
       const components = await injectComponents({ ...args });
-      const { slackApi, language, user, op } = components;
+      const { slackApi, language, user, op, canAccessAdminFeature } =
+        components;
       try {
+        if (!await canAccessAdminFeature()) return {};
         const selectedMenu: string = action.selected_option.value;
         if (selectedMenu === AdminMenuItem.AdminReportDownload) {
           await slackApi.views.update({
@@ -856,8 +860,9 @@ export default SlackFunction(
     async (args) => {
       const { view, inputs: { user_id } } = args;
       const components = await injectComponents({ ...args });
-      const { user, offset, language } = components;
+      const { user, offset, language, canAccessAdminFeature } = components;
       try {
+        if (!await canAccessAdminFeature()) return {};
         const year = stateValue(view, BlockId.Year)!.selected_option!.value;
         const month = stateValue(view, BlockId.Month)!.selected_option!.value;
         const mm = ("00" + month).slice(-2);
