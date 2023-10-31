@@ -40,6 +40,7 @@ jobs:
         # e.g. {"project_id":"cb89b21e-3a86-44c6-afce-************"}
         SLACK_CONFIG_JSON: ${{ secrets.SLACK_CONFIG_JSON }}
       run: |
+        mkdir -p .slack/
         echo $SLACK_SERVICE_TOKEN > .slack/apps.json
         echo $SLACK_CONFIG_JSON > .slack/config.json
         slack upgrade

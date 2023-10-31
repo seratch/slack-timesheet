@@ -1,0 +1,10 @@
+dist
+package
+.DS_Store
+
+# The setting file for your local version of the app should be always excluded
+.slack/apps.dev.json
+# The following files are excluded as .github/workflows/deployments.yml in this repo uses GitHub repository secrets instead.
+# If you want to commit this file, you can remove the following entry:
+.slack/apps.json
+.slack/config.json
