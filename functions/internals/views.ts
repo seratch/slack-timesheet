@@ -249,24 +249,24 @@ export async function syncMainView({
 interface toMainViewArgs {
   isDebugMode: boolean;
   manualEntryPermitted: boolean;
+  canAccessAdminFeature: () => Promise<boolean>;
   view: ModalView;
   offset: number;
   language: string;
   item: SavedAttributes<TE>;
   holidays: () => Promise<SavedAttributes<PH> | undefined>;
-  canAccessAdminFeature: () => Promise<boolean>;
   yyyymmdd: string | undefined;
 }
 export async function toMainView(
   {
     isDebugMode,
     manualEntryPermitted,
+    canAccessAdminFeature,
     view,
     offset,
     language,
     item,
     holidays,
-    canAccessAdminFeature,
     yyyymmdd,
   }: toMainViewArgs,
 ): Promise<ModalView> {
@@ -276,11 +276,11 @@ export async function toMainView(
   view.blocks = await mainViewBlocks({
     isDebugMode,
     manualEntryPermitted,
+    canAccessAdminFeature,
     offset,
     language,
     item,
     holidays,
-    canAccessAdminFeature,
     yyyymmdd,
   });
   return view;
@@ -289,21 +289,21 @@ export async function toMainView(
 interface mainViewBlocksArgs {
   isDebugMode: boolean;
   manualEntryPermitted: boolean;
+  canAccessAdminFeature: () => Promise<boolean>;
   offset: number;
   language: string;
   item: SavedAttributes<TE>;
-  canAccessAdminFeature: () => Promise<boolean>;
   holidays: () => Promise<SavedAttributes<PH> | undefined>;
   yyyymmdd: string | undefined;
 }
 export async function mainViewBlocks({
   isDebugMode,
   manualEntryPermitted,
+  canAccessAdminFeature,
   offset,
   language,
   item,
   holidays,
-  canAccessAdminFeature,
   yyyymmdd,
 }: mainViewBlocksArgs): Promise<AnyModalBlock[]> {
   const entries = (item.work_entries || []).map((e) => {
@@ -357,69 +357,39 @@ export async function mainViewBlocks({
       typeLabel = i18n(Label.TimeOff, language);
       emoji = Emoji.TimeOff;
     }
-    if (end === "" || end === undefined) {
-      const options: PlainTextOption[] = [];
-      if (manualEntryPermitted) {
-        options.push({
-          "text": {
-            "type": "plain_text",
-            "text": i18n(Label.Edit, language),
-          },
-          "value": `edit___${entry}`,
-        });
-      }
+    const options: PlainTextOption[] = [];
+    if (manualEntryPermitted) {
       options.push({
         "text": {
           "type": "plain_text",
-          "text": i18n(Label.Delete, language),
+          "text": i18n(Label.Edit, language),
         },
-        "value": `delete___${entry}`,
+        "value": `edit___${entry}`,
       });
-
-      entryBlocks.push({
-        "type": "section",
-        "text": {
-          "type": "mrkdwn",
-          "text": `*${emoji} ${typeLabel}:* ${start} -`,
-        },
-        "accessory": {
-          "type": "overflow",
-          "action_id": ActionId.EditOrDeleteEntry,
-          "options": options,
-        },
-      });
+    }
+    options.push({
+      "text": {
+        "type": "plain_text",
+        "text": i18n(Label.Delete, language),
+      },
+      "value": `delete___${entry}`,
+    });
+    if (end === undefined) end === "";
+    const label = `*${emoji} ${typeLabel}:* ${start} - ${end}`;
+    entryBlocks.push({
+      "type": "section",
+      "text": { "type": "mrkdwn", "text": label },
+      "accessory": {
+        "type": "overflow",
+        "action_id": ActionId.EditOrDeleteEntry,
+        "options": options,
+      },
+    });
+    if (end === "" || end === undefined) {
       if (type === EntryType.BreakTime) {
         breakTime = true;
       }
       businessHours = true;
-    } else {
-      entryBlocks.push({
-        "type": "section",
-        "text": {
-          "type": "mrkdwn",
-          "text": `*${emoji} ${typeLabel}:* ${start} - ${end}`,
-        },
-        "accessory": {
-          "type": "overflow",
-          "action_id": ActionId.EditOrDeleteEntry,
-          "options": [
-            {
-              "text": {
-                "type": "plain_text",
-                "text": i18n(Label.Edit, language),
-              },
-              "value": `edit___${entry}`,
-            },
-            {
-              "text": {
-                "type": "plain_text",
-                "text": i18n(Label.Delete, language),
-              },
-              "value": `delete___${entry}`,
-            },
-          ],
-        },
-      });
     }
   }
 
