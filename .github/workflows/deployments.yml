@@ -1,4 +1,4 @@
-name: Slack App Deployment
+name: Deploy to my Slack workspace
 # Deploy the latest revision of this repo to Slack platform when:
 on:
   push:
@@ -41,7 +41,7 @@ jobs:
         SLACK_CONFIG_JSON: ${{ secrets.SLACK_CONFIG_JSON }}
       run: |
         mkdir -p .slack/
-        echo $SLACK_SERVICE_TOKEN > .slack/apps.json
+        echo $SLACK_APPS_JSON > .slack/apps.json
         echo $SLACK_CONFIG_JSON > .slack/config.json
         slack upgrade
         slack deploy --token $SLACK_SERVICE_TOKEN
