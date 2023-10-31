@@ -1,0 +1,46 @@
+name: Slack App Deployment
+# Deploy the latest revision of this repo to Slack platform when:
+on:
+  push:
+    branches: [ main ]
+jobs:
+  build:
+    # You can go with any other Linux options if you prefer
+    runs-on: ubuntu-latest
+    # The deployment process itself usually takes less than 1 minute
+    # When your app's code base is larger in the future, you may want to adjust this duration
+    timeout-minutes: 5
+    steps:
+    - uses: actions/checkout@v4
+    # Slack CLI requires Deno runtime
+    - name: Install Deno runtime
+      uses: denoland/setup-deno@v1
+      with:
+        # Using the latest stable version along with Slack CLI is recommend
+        deno-version: v1.x
+    - name: Cache Slack CLI installation
+      id: cache-slack
+      uses: actions/cache@v3
+      with:
+        path: |
+          /usr/local/bin/slack
+          ~/.slack/bin/slack
+        key: ${{ runner.os }}-slack
+    - name: Install Slack CLI
+      if: steps.cache-slack.outputs.cache-hit != 'true'
+      run: |
+        curl -fsSL https://downloads.slack-edge.com/slack-cli/install.sh | bash
+    - name: Deploy the app
+      env:
+        # you can obtain this token string (xoxp-...) by running `slack auth token`
+        # Note that this token is connected to a specific Slack workspace/org
+        SLACK_SERVICE_TOKEN: ${{ secrets.SLACK_SERVICE_TOKEN }}
+        # e.g. {"apps": {"T01GKG*****": {"app_id": "A06400*****","IsDev": false,"team_domain": "acme-corp","team_id": "T01GKG*****"}},"default": "acme-corp"}
+        SLACK_APPS_JSON: ${{ secrets.SLACK_APPS_JSON }}
+        # e.g. {"project_id":"cb89b21e-3a86-44c6-afce-************"}
+        SLACK_CONFIG_JSON: ${{ secrets.SLACK_CONFIG_JSON }}
+      run: |
+        echo $SLACK_SERVICE_TOKEN > .slack/apps.json
+        echo $SLACK_CONFIG_JSON > .slack/config.json
+        slack upgrade
+        slack deploy --token $SLACK_SERVICE_TOKEN
