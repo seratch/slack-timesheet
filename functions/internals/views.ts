@@ -2,6 +2,7 @@ import { DataMapper, SavedAttributes } from "deno-slack-data-mapper/mod.ts";
 import {
   AnyActionBlockElementType,
   AnyModalBlock,
+  Button,
   Checkboxes,
   ExternalSelect,
   ModalView,
@@ -553,65 +554,51 @@ export async function mainViewBlocks({
     topBlocks.push({ "type": "divider" });
   }
   if (isToday) {
+    const StartWorkButton = quickButton({
+      action_id: ActionId.StartWork,
+      emoji: Emoji.Work,
+      label: Label.StartWork,
+      style: "primary",
+      language,
+    });
+    const FinishWorkButton = quickButton({
+      action_id: ActionId.FinishWork,
+      emoji: Emoji.Work,
+      label: Label.FinishWork,
+      style: "danger",
+      language,
+    });
+    const StartBreakTimeButton = quickButton({
+      action_id: ActionId.StartBreakTime,
+      emoji: Emoji.BreakTime,
+      label: Label.StartBreakTime,
+      style: "primary",
+      language,
+    });
+    const FinishBreakTimeButton = quickButton({
+      action_id: ActionId.FinishBreakTime,
+      emoji: Emoji.BreakTime,
+      label: Label.FinishBreakTime,
+      style: "danger",
+      language,
+    });
+
     if (businessHours) {
       if (breakTime) {
         topBlocks.push({
           "type": "actions",
-          "elements": [
-            {
-              "type": "button",
-              "action_id": ActionId.FinishBreakTime,
-              "text": {
-                "type": "plain_text",
-                "text": i18n(Label.FinishBreakTime, language),
-              },
-              "style": "danger",
-              "value": "1",
-            },
-          ],
+          "elements": [FinishBreakTimeButton],
         });
       } else {
         topBlocks.push({
           "type": "actions",
-          "elements": [
-            {
-              "type": "button",
-              "action_id": ActionId.StartBreakTime,
-              "text": {
-                "type": "plain_text",
-                "text": i18n(Label.StartBreakTime, language),
-              },
-              "style": "primary",
-              "value": "1",
-            },
-            {
-              "type": "button",
-              "action_id": ActionId.FinishWork,
-              "text": {
-                "type": "plain_text",
-                "text": i18n(Label.FinishWork, language),
-              },
-              "style": "danger",
-              "value": "1",
-            },
-          ],
+          "elements": [StartBreakTimeButton, FinishWorkButton],
         });
       }
     } else {
       topBlocks.push({
         "type": "actions",
-        "elements": [
-          {
-            "type": "button",
-            "action_id": ActionId.StartWork,
-            "text": {
-              "type": "plain_text",
-              "text": i18n(Label.StartWork, language),
-            },
-            "style": "primary",
-            "value": "1",
-          },
-        ],
+        "elements": [StartWorkButton, StartBreakTimeButton],
       });
     }
   }
@@ -636,6 +623,29 @@ export async function mainViewBlocks({
     });
   }
   return blocks;
+}
+
+interface quickButtonArgs {
+  action_id: string;
+  emoji: string;
+  label: string;
+  style: "primary" | "danger" | undefined;
+  language: string;
+}
+function quickButton(
+  { action_id, emoji, label, style, language }: quickButtonArgs,
+): Button {
+  const button: Button = {
+    "type": "button",
+    "action_id": action_id,
+    "text": {
+      "type": "plain_text",
+      "text": emoji + " " + i18n(label, language),
+    },
+    "value": "1",
+  };
+  if (style) button.style = style;
+  return button;
 }
 
 // -----------------------------------------
