@@ -113,7 +113,6 @@ export function deserializeTimeEntry(
   }
 }
 
-let _fetchTimeEntry: SavedAttributes<TE> | undefined;
 interface fetchTimeEntryArgs {
   te: DataMapper<TE>;
   user: string;
@@ -123,11 +122,9 @@ interface fetchTimeEntryArgs {
 export async function fetchTimeEntry(
   { te, user, offset, yyyymmdd }: fetchTimeEntryArgs,
 ): Promise<SavedAttributes<TE>> {
-  if (_fetchTimeEntry) return _fetchTimeEntry;
   const _yyyymmdd = yyyymmdd ?? todayYYYYMMDD(offset);
   const response = await te.findById(`${user}-${_yyyymmdd}`);
-  _fetchTimeEntry = response.item;
-  return _fetchTimeEntry;
+  return response.item;
 }
 
 interface fetchMonthTimeEntriesArgs {
@@ -177,7 +174,6 @@ export async function fetchAllMemberMonthTimeEntries(
   return result;
 }
 
-let _fetchRecentTimeEntries: SavedAttributes<TE>[] | undefined;
 interface fetchRecentTimeEntriesArgs {
   te: DataMapper<TE>;
   user: string;
@@ -190,7 +186,6 @@ export async function fetchRecentTimeEntries({
   yyyymm,
   limit,
 }: fetchRecentTimeEntriesArgs): Promise<SavedAttributes<TE>[]> {
-  if (_fetchRecentTimeEntries) return _fetchRecentTimeEntries;
   const monthsToSearch: string[] = [yyyymm];
   let year = yyyymm.substring(0, 4);
   let month = yyyymm.substring(4, 6);
@@ -215,8 +210,7 @@ export async function fetchRecentTimeEntries({
     if (!a.user_and_date || !b.user_and_date) return 0;
     return a.user_and_date > b.user_and_date ? 1 : -1;
   });
-  _fetchRecentTimeEntries = items;
-  return _fetchRecentTimeEntries;
+  return items;
 }
 
 interface saveTimeEntryArgs {
