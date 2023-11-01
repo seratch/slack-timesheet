@@ -52,7 +52,7 @@ labels[Label.hour] = { "ja": "時間" };
 labels[Label.minute] = { "ja": "分" };
 // Countries
 labels[Label.Japan] = { "ja": "日本" };
-labels[Label.Japan] = { "us": "アメリカ合衆国" };
+labels[Label.UnitedStates] = { "ja": "アメリカ合衆国" };
 // Report UI messages
 labels[Label.HereIsTheReportYouRequested] = {
   "ja": "こちらがご希望の月次レポートです！",
