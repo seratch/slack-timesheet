@@ -69,7 +69,7 @@ labels[Label.ProjectCode] = { "ja": "プロジェクトコード" };
 labels[Label.ProjectName] = { "ja": "プロジェクト名" };
 labels[Label.ProjectIsActive] = { "ja": "利用可能" };
 labels[Label.ProjectDescription] = { "ja": "説明・メモ" };
-labels[Label.ManualEntryPermitted] = { "ja": "履歴の手入力・編集を許可する" };
+labels[Label.ManualEntryPermitted] = { "ja": "履歴の手入力・編集" };
 labels[Label.OrganizationPolicyValue_Permitted] = { "ja": "可" };
 labels[Label.OrganizationPolicyValue_Restricted] = { "ja": "不可" };
 // Admin report UI messages

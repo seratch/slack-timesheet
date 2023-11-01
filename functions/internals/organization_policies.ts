@@ -5,6 +5,7 @@ import { Label } from "./constants.ts";
 export interface OrganizationPolicyDetails {
   label: string;
   values: OrganizationPolicyValueDetails[];
+  mustSelectOne: boolean;
 }
 export interface OrganizationPolicyValueDetails {
   value: string;
@@ -15,11 +16,14 @@ export const OrganizationPolices: Record<string, OrganizationPolicyDetails> =
 
 export class OrganizationPolicyKey {
   static IsManualEntryPermitted = "is_manual_entry_permitted";
+  static Country = "country";
 }
 
 export class OrganizationPolicyValue {
   static Permitted = "permitted";
   static Restricted = "restricted";
+  static Japan = "jp";
+  static UnitedStates = "us";
 }
 
 // slack datastore put '{"datastore":"organization_policies","item": {"key":"is_manual_entry_permitted","value":"restricted"}}'
@@ -35,6 +39,15 @@ OrganizationPolices[OrganizationPolicyKey.IsManualEntryPermitted] = {
       label: Label.OrganizationPolicyValue_Restricted,
     },
   ],
+  mustSelectOne: true,
+};
+OrganizationPolices[OrganizationPolicyKey.Country] = {
+  label: Label.Country,
+  values: [
+    { value: OrganizationPolicyValue.Japan, label: Label.Japan },
+    { value: OrganizationPolicyValue.UnitedStates, label: Label.UnitedStates },
+  ],
+  mustSelectOne: false,
 };
 
 interface isManualEntryPermittedArgs {
@@ -49,4 +62,14 @@ export async function isManualEntryPermitted(
     return value !== OrganizationPolicyValue.Restricted;
   }
   return true;
+}
+
+interface fetchDefaultCountryArgs {
+  op: DataMapper<OP>;
+}
+export async function fetchDefaultCountryId(
+  { op }: fetchDefaultCountryArgs,
+): Promise<string | undefined> {
+  const row = await op.findById(OrganizationPolicyKey.Country);
+  return row.item.value;
 }

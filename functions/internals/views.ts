@@ -12,6 +12,7 @@ import {
   PlainTextOption,
   RichTextBlock,
   SlackAPIClient,
+  StaticSelect,
 } from "slack-web-api-client/mod.ts";
 
 import { i18n } from "./i18n.ts";
@@ -717,6 +718,7 @@ interface toUserSettingsViewArgs {
   view: ModalView;
   settings: SavedAttributes<US>;
   countries: SavedAttributes<C>[];
+  defaultCountryId: string | undefined;
   language: string;
   country: string | undefined;
 }
@@ -725,6 +727,7 @@ export function toUserSettingsView({
   view,
   settings,
   countries,
+  defaultCountryId,
   language,
   country,
 }: toUserSettingsViewArgs): ModalView {
@@ -750,8 +753,9 @@ export function toUserSettingsView({
     },
   });
   const options = CountryOptions(countries, language);
+  const countryId = settings.country_id ?? defaultCountryId;
   if (options && options.length > 0) {
-    let selectedOption = options.find((c) => c.value === settings.country_id);
+    let selectedOption = options.find((c) => c.value === countryId);
     if (!selectedOption) {
       selectedOption = options.find((c) => c.value === country);
     }
@@ -1539,7 +1543,7 @@ export function toOrganizationPoliciesView({
         value: key + "___" + v.value,
       });
     }
-    let selectedOption = options[0];
+    let selectedOption = details.mustSelectOne ? options[0] : undefined;
     const saved = policies.find((p) => p.key === key);
     if (saved) {
       const savedOption = options.find((o) =>
@@ -1547,15 +1551,16 @@ export function toOrganizationPoliciesView({
       );
       if (savedOption) selectedOption = savedOption;
     }
+    const element: StaticSelect = {
+      "type": "static_select",
+      "action_id": ActionId.OrganizationPolicyChange,
+      "options": options,
+    };
+    if (selectedOption) element.initial_option = selectedOption;
     view.blocks.push({
       "type": "section",
       "text": { "type": "mrkdwn", "text": i18n(details.label, language) },
-      "accessory": {
-        "type": "static_select",
-        "action_id": ActionId.OrganizationPolicyChange,
-        "options": options,
-        "initial_option": selectedOption,
-      },
+      "accessory": element,
     });
   }
   return view;

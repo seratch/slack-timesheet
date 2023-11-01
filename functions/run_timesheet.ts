@@ -79,6 +79,7 @@ import {
   validateTimeEntrySubmission,
 } from "./internals/validation.ts";
 import {
+  fetchDefaultCountryId,
   isManualEntryPermitted,
   OrganizationPolices,
 } from "./internals/organization_policies.ts";
@@ -123,7 +124,13 @@ export default SlackFunction(
         ...components,
         countries,
       });
-      view = toUserSettingsView({ view, countries, ...components });
+      const defaultCountryId = await fetchDefaultCountryId({ ...components });
+      view = toUserSettingsView({
+        view,
+        countries,
+        defaultCountryId,
+        ...components,
+      });
     } else {
       const item = await fetchTimeEntry({ ...components });
       const manualEntryPermitted = await isManualEntryPermitted({
@@ -620,6 +627,7 @@ export default SlackFunction(
             view: toUserSettingsView({
               view: newView(language),
               countries: await fetchAllCountries({ ...components }),
+              defaultCountryId: undefined, // no need to use this here
               ...components,
             }),
           });
