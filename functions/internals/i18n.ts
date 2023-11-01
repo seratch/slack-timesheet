@@ -12,7 +12,6 @@ labels[Label.Save] = { "ja": "保存する" };
 labels[Label.RefreshButton] = { "ja": "更新" };
 labels[Label.Language] = { "ja": "言語" };
 labels[Label.Country] = { "ja": "国" };
-labels[Label.Japan] = { "ja": "日本" };
 labels[Label.Work] = { "ja": "勤務" };
 labels[Label.BreakTime] = { "ja": "休憩" };
 labels[Label.TimeOff] = { "ja": "休暇" };
@@ -51,6 +50,9 @@ labels[Label.minutes] = { "ja": "分" };
 labels[Label.day] = { "ja": "日" };
 labels[Label.hour] = { "ja": "時間" };
 labels[Label.minute] = { "ja": "分" };
+// Countries
+labels[Label.Japan] = { "ja": "日本" };
+labels[Label.Japan] = { "us": "アメリカ合衆国" };
 // Report UI messages
 labels[Label.HereIsTheReportYouRequested] = {
   "ja": "こちらがご希望の月次レポートです！",

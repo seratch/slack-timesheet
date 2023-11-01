@@ -105,7 +105,6 @@ export class Label {
   static RefreshButton = "Refresh";
   static Language = "Language";
   static Country = "Country";
-  static Japan = "Japan";
   static Work = "Work";
   static BreakTime = "Break time";
   static TimeOff = "Time off";
@@ -145,6 +144,10 @@ export class Label {
   static hour = "hour";
   static minute = "minute";
 
+  // Countries
+  static Japan = "Japan";
+  static UnitedStates = "United States";
+
   // Report UI messages
   static HereIsTheReportYouRequested =
     "Here is the monthly report you requested!";
@@ -178,4 +181,9 @@ export class EntryType {
   static Work = "work";
   static BreakTime = "break_time";
   static TimeOff = "time_off";
+}
+
+export class CountryCode {
+  static UnitedStates = "us";
+  static Japan = "jp";
 }

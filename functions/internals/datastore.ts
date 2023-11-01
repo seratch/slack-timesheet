@@ -15,6 +15,7 @@ import Projects from "../../datastores/projects.ts";
 import OrganizationPolicies from "../../datastores/organization_policies.ts";
 
 import { todayYYYYMMDD } from "./datetime.ts";
+import { CountryCode, Label } from "./constants.ts";
 
 export type LogLevel = "DEBUG" | "INFO";
 
@@ -249,6 +250,84 @@ export async function fetchAllCountries(
 ): Promise<SavedAttributes<C>[]> {
   return (await c.findAll()).items;
 }
+
+const DefaultCountries: Attributes<C>[] = [
+  { id: CountryCode.Japan, label: Label.Japan },
+  { id: CountryCode.UnitedStates, label: Label.UnitedStates },
+];
+interface setupCountriesAndHolidaysIfNecessaryArgs {
+  countries: SavedAttributes<C>[];
+  c: DataMapper<C>;
+  ph: DataMapper<PH>;
+}
+export async function setupCountriesAndHolidaysIfNecessary(
+  { countries, c, ph }: setupCountriesAndHolidaysIfNecessaryArgs,
+): Promise<SavedAttributes<C>[]> {
+  if (countries.length !== DefaultCountries.length) {
+    for (const attributes of DefaultCountries) {
+      await c.save({ attributes });
+    }
+    for (const attributes of DefaultPublicHolidays) {
+      await ph.save({ attributes });
+    }
+    return (await c.findAll()).items;
+  }
+  return countries;
+}
+
+// -----------------------------------------
+// PublicHolidays
+// -----------------------------------------
+
+const DefaultPublicHolidays: Attributes<PH>[] = [
+  {
+    country_id_and_year: CountryCode.Japan + "-2023",
+    holidays: [
+      "20230101",
+      "20230102",
+      "20230109",
+      "20230211",
+      "20230223",
+      "20230321",
+      "20230429",
+      "20230503",
+      "20230504",
+      "20230505",
+      "20230717",
+      "20230811",
+      "20230918",
+      "20230923",
+      "20231009",
+      "20231103",
+      "20231123",
+    ],
+  },
+  {
+    country_id_and_year: CountryCode.Japan + "-2024",
+    holidays: [
+      "20240101",
+      "20240108",
+      "20240211",
+      "20240212",
+      "20240223",
+      "20240320",
+      "20240429",
+      "20240503",
+      "20240504",
+      "20240505",
+      "20240506",
+      "20240715",
+      "20240811",
+      "20240812",
+      "20240916",
+      "20240922",
+      "20241014",
+      "20241103",
+      "20241104",
+      "20241123",
+    ],
+  },
+];
 
 // -----------------------------------------
 // Projects

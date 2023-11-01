@@ -65,6 +65,7 @@ import {
   saveTimeEntry,
   saveUserSettings,
   serializeTimeEntry,
+  setupCountriesAndHolidaysIfNecessary,
   TE,
   US,
 } from "./internals/datastore.ts";
@@ -117,11 +118,12 @@ export default SlackFunction(
       if (isDebugMode) {
         console.log(`### First time user (settings: ${p(settings)})`);
       }
-      view = toUserSettingsView({
-        view,
-        countries: await fetchAllCountries({ ...components }),
+      let countries = await fetchAllCountries({ ...components });
+      countries = await setupCountriesAndHolidaysIfNecessary({
         ...components,
+        countries,
       });
+      view = toUserSettingsView({ view, countries, ...components });
     } else {
       const item = await fetchTimeEntry({ ...components });
       const manualEntryPermitted = await isManualEntryPermitted({
@@ -701,8 +703,9 @@ export default SlackFunction(
             view: await toMainView({
               view: newView(language),
               item: entryForTheDay,
-              manualEntryPermitted,
               ...components,
+              manualEntryPermitted,
+              language: saved.language,
             }),
           };
         }
