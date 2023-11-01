@@ -118,7 +118,7 @@ export async function validateProjectSubmission(
   { code, name, description, p, language }: validateProjectSubmissionArgs,
 ): Promise<Record<string, string>> {
   const errors: Record<string, string> = {};
-  if (code !== undefined && code.length > 15) {
+  if (code !== undefined && code.length > 20) {
     // You can customize as necessary
     errors[BlockId.ProjectCode] = i18n(Label.TooLongInput, language);
   } else if (code !== undefined && !areAllCharsAllowedForProjectCode(code)) {
@@ -129,7 +129,7 @@ export async function validateProjectSubmission(
   } else if (code && (await p.findById(code)).item.code != undefined) {
     errors[BlockId.ProjectCode] = i18n(Label.CodeAlreadyExists, language);
   }
-  if (name.length > 20) {
+  if (name.length > 50) {
     // You can customize as necessary
     errors[BlockId.ProjectName] = i18n(Label.TooLongInput, language);
   }

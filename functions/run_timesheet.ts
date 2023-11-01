@@ -33,6 +33,7 @@ import {
   newEditProjectBlocks,
   newEditProjectView,
   newView,
+  projectSearchResultOptions,
   stateValue,
   syncMainView,
   syncProjectMainView,
@@ -58,7 +59,6 @@ import {
   fetchProject,
   fetchRecentTimeEntries,
   fetchTimeEntry,
-  fetchUserDetails,
   hasActiveProjects,
   P,
   saveProject,
@@ -82,6 +82,7 @@ import {
   OrganizationPolices,
 } from "./internals/organization_policies.ts";
 import { i18n } from "./internals/i18n.ts";
+import { fetchUserDetails } from "./internals/slack_api.ts";
 
 export const def = DefineFunction({
   callback_id: "run_timesheet",
@@ -874,24 +875,26 @@ export default SlackFunction(
         for (const [reportUser, items] of Object.entries(userToItems)) {
           tasks.push(
             new Promise((resolve, reject) => {
-              fetchUserDetails(components.slackApi, reportUser)
-                .then(async (userInfo) => {
-                  const reportUserEmail = userInfo.user?.profile?.email;
-                  if (reportUserEmail) {
-                    try {
-                      const report = await generateReport({
-                        month,
-                        items,
-                        ...components,
-                        user: reportUser, // override the components
-                        email: reportUserEmail, // override the components
-                      });
-                      resolve(report);
-                    } catch (e) {
-                      reject(e);
-                    }
+              fetchUserDetails({
+                slackApi: components.slackApi,
+                user: reportUser,
+              }).then(async (userInfo) => {
+                const reportUserEmail = userInfo.user?.profile?.email;
+                if (reportUserEmail) {
+                  try {
+                    const report = await generateReport({
+                      month,
+                      items,
+                      ...components,
+                      user: reportUser, // override the components
+                      email: reportUserEmail, // override the components
+                    });
+                    resolve(report);
+                  } catch (e) {
+                    reject(e);
                   }
-                });
+                }
+              });
             }),
           );
         }
@@ -1089,32 +1092,11 @@ export default SlackFunction(
         const recentEntries = await fetchRecentTimeEntries(
           { limit: 100, yyyymm: todayYYYYMMDD(offset), ...components },
         );
-        const ranking: Record<string, number> = {};
-        for (const entry of recentEntries) {
-          for (const w of entry.work_entries) {
-            const e = deserializeTimeEntry(w);
-            if (e && e.project_code) {
-              ranking[e.project_code] = (ranking[e.project_code] || 0) + 1;
-            }
-          }
-        }
         const allProjects = await fetchAllActiveProjects({ ...components });
-        const matchedProjects = allProjects
-          .filter((p) =>
-            p.code.includes(keyword) ||
-            p.name.includes(keyword) ||
-            (p.description || "").includes(keyword)
-          )
-          .sort((a, b) => {
-            return (ranking[a.code] || 0) > (ranking[b.code] || 0) ? -1 : 1;
-          })
-          .slice(0, 100);
-
-        const options: ExternalSelectOption[] = matchedProjects.map((p) => {
-          return {
-            text: { type: "plain_text", text: `${p.code}: ${p.name}` },
-            value: p.code,
-          };
+        const options = projectSearchResultOptions({
+          keyword,
+          recentEntries,
+          allProjects,
         });
         return { options };
       } catch (e) {
@@ -1167,15 +1149,6 @@ export default SlackFunction(
       }
     },
   );
-
-interface ExternalSelectOption {
-  text: {
-    type: "plain_text";
-    text: string;
-    emoji?: boolean;
-  };
-  value: string;
-}
 
 export function p(obj: unknown): string {
   return JSON.stringify(obj);

@@ -400,18 +400,12 @@ export async function mainViewBlocks({
     const options: PlainTextOption[] = [];
     if (manualEntryPermitted) {
       options.push({
-        "text": {
-          "type": "plain_text",
-          "text": i18n(Label.Edit, language),
-        },
+        "text": { "type": "plain_text", "text": i18n(Label.Edit, language) },
         "value": `edit___${entry}`,
       });
     }
     options.push({
-      "text": {
-        "type": "plain_text",
-        "text": i18n(Label.Delete, language),
-      },
+      "text": { "type": "plain_text", "text": i18n(Label.Delete, language) },
       "value": `delete___${entry}`,
     });
     if (end === undefined) end === "";
@@ -490,10 +484,7 @@ export async function mainViewBlocks({
   const topBlocks: AnyModalBlock[] = [
     {
       "type": "section",
-      "text": {
-        "type": "mrkdwn",
-        "text": `${emoji}  *${datetime}*  ${emoji}`,
-      },
+      "text": { "type": "mrkdwn", "text": `${emoji}  *${datetime}*  ${emoji}` },
       "accessory": {
         "type": "overflow",
         "action_id": ActionId.Menu,
@@ -546,10 +537,7 @@ export async function mainViewBlocks({
 
   topBlocks.push({
     "type": "section",
-    "text": {
-      "type": "mrkdwn",
-      "text": report,
-    },
+    "text": { "type": "mrkdwn", "text": report },
     "accessory": {
       "type": "button",
       "action_id": ActionId.Refresh,
@@ -760,10 +748,7 @@ export function toCalendarView(
   view.blocks.push({
     "type": "input",
     "block_id": BlockId.Date,
-    "label": {
-      "type": "plain_text",
-      "text": i18n(Label.Date, language),
-    },
+    "label": { "type": "plain_text", "text": i18n(Label.Date, language) },
     "element": {
       "type": "datepicker",
       "action_id": ActionId.Input,
@@ -847,6 +832,7 @@ function reportStartBlocks(
       value: i.toString(),
     });
   }
+  const month = yyyymmdd.substring(4, 6);
   blocks.push({
     "type": "input",
     "block_id": BlockId.Month,
@@ -856,8 +842,8 @@ function reportStartBlocks(
       "action_id": ActionId.Input,
       "options": months,
       "initial_option": {
-        text: { type: "plain_text", text: yyyymmdd.substring(4, 6) },
-        value: yyyymmdd.substring(4, 6),
+        text: { type: "plain_text", text: month },
+        value: month,
       },
     },
   });
@@ -1224,11 +1210,7 @@ export async function syncProjectMainView({
 }: syncProjectMainViewArgs) {
   await slackApi.views.update({
     view_id: viewId,
-    view: toProjectMainView({
-      view: newView(language),
-      projects,
-      language,
-    }),
+    view: toProjectMainView({ view: newView(language), projects, language }),
   });
 }
 
@@ -1255,10 +1237,7 @@ export function toProjectMainView({
     "accessory": {
       "type": "button",
       "action_id": ActionId.AddProject,
-      "text": {
-        "type": "plain_text",
-        "text": i18n(Label.Add, language),
-      },
+      "text": { "type": "plain_text", "text": i18n(Label.Add, language) },
       "style": "primary",
       "value": "1",
     },
@@ -1279,10 +1258,7 @@ export function toProjectMainView({
         "accessory": {
           "type": "button",
           "action_id": ActionId.EditProject,
-          "text": {
-            "type": "plain_text",
-            "text": i18n(Label.Edit, language),
-          },
+          "text": { "type": "plain_text", "text": i18n(Label.Edit, language) },
           "style": "primary",
           "value": project.code,
         },
@@ -1299,10 +1275,7 @@ export function newAddProjectBlocks(
   { language }: newAddProjectBlocksArgs,
 ): AnyModalBlock[] {
   function label(label: string): PlainTextField {
-    return {
-      "type": "plain_text",
-      "text": i18n(label, language),
-    };
+    return { "type": "plain_text", "text": i18n(label, language) };
   }
   function plainTextInput(multiline: boolean): PlainTextInput {
     return {
@@ -1382,10 +1355,7 @@ export function newEditProjectBlocks(
   { item, language }: newEditProjectBlocksArgs,
 ): AnyModalBlock[] {
   function label(label: string): PlainTextField {
-    return {
-      "type": "plain_text",
-      "text": i18n(label, language),
-    };
+    return { "type": "plain_text", "text": i18n(label, language) };
   }
   function plainTextInput(
     initialValue: string,
@@ -1568,4 +1538,52 @@ export function toAdminReportDownloadCompletionView(
     "text": { "type": "mrkdwn", "text": message },
   });
   return view;
+}
+
+interface projectSearchResultOptionsArgs {
+  keyword: string;
+  recentEntries: SavedAttributes<TE>[];
+  allProjects: SavedAttributes<P>[];
+}
+export function projectSearchResultOptions({
+  keyword,
+  recentEntries,
+  allProjects,
+}: projectSearchResultOptionsArgs): ExternalSelectOption[] {
+  const ranking: Record<string, number> = {};
+  for (const entry of recentEntries) {
+    for (const w of entry.work_entries) {
+      const e = deserializeTimeEntry(w);
+      if (e && e.project_code) {
+        ranking[e.project_code] = (ranking[e.project_code] || 0) + 1;
+      }
+    }
+  }
+  const matchedProjects = allProjects
+    .filter((p) =>
+      p.code.includes(keyword) ||
+      p.name.includes(keyword) ||
+      (p.description || "").includes(keyword)
+    )
+    .sort((a, b) => {
+      return (ranking[a.code] || 0) > (ranking[b.code] || 0) ? -1 : 1;
+    })
+    .slice(0, 100);
+
+  const options: ExternalSelectOption[] = matchedProjects.map((p) => {
+    return {
+      text: { type: "plain_text", text: `${p.code}: ${p.name}` },
+      value: p.code,
+    };
+  });
+  return options;
+}
+
+interface ExternalSelectOption {
+  text: {
+    type: "plain_text";
+    text: string;
+    emoji?: boolean;
+  };
+  value: string;
 }

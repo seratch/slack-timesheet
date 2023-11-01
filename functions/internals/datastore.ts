@@ -5,7 +5,6 @@ import {
   Operator,
   SavedAttributes,
 } from "deno-slack-data-mapper/mod.ts";
-import { SlackAPIClient, UsersInfoResponse } from "slack-web-api-client/mod.ts";
 
 import TimeEntries from "../../datastores/time_entries.ts";
 import UserSettings from "../../datastores/user_settings.ts";
@@ -26,6 +25,10 @@ export type PH = typeof PublicHolidays.definition;
 export type AU = typeof AdminUsers.definition;
 export type P = typeof Projects.definition;
 export type OP = typeof OrganizationPolicies.definition;
+
+// -----------------------------------------
+// DataMapper initializer
+// -----------------------------------------
 
 function createDataMapper<DEF extends TE | US | C | PH | AU | P | OP>(
   def: DEF,
@@ -61,16 +64,56 @@ export function OPMapper(client: Client, logLevel: LogLevel): DataMapper<OP> {
   return createDataMapper(OrganizationPolicies.definition, client, logLevel);
 }
 
-export async function fetchUserDetails(
-  slackApi: SlackAPIClient,
-  userId: string,
-): Promise<UsersInfoResponse> {
-  return await slackApi.users.info({
-    user: userId,
-    include_locale: true,
-  });
+// -----------------------------------------
+// TimeEntries
+// -----------------------------------------
+
+export interface TimeEntry {
+  start: string;
+  end: string;
+  project_code: string | undefined;
+}
+export interface EnhancedTimeEntry extends TimeEntry {
+  // This can be used only in app code, not in the datastore
+  type: string | undefined;
 }
 
+export function serializeTimeEntry(entry: TimeEntry): string {
+  return `${entry.start},${entry.end || ""},${entry.project_code || ""}`;
+}
+
+export function deserializeTimeEntry(
+  value: string,
+): EnhancedTimeEntry | undefined {
+  if (!value) return undefined;
+  const elems = value.split(",");
+  if (elems.length === 2) {
+    return {
+      start: elems[0],
+      end: elems[1] ? elems[1] : "",
+      project_code: undefined,
+      type: undefined,
+    };
+  } else if (elems.length === 3) {
+    return {
+      start: elems[0],
+      end: elems[1] ? elems[1] : "",
+      project_code: elems[2] === "" ? undefined : elems[2],
+      type: undefined,
+    };
+  } else if (elems.length === 4) {
+    return {
+      start: elems[0],
+      end: elems[1] ? elems[1] : "",
+      project_code: elems[2] === "" ? undefined : elems[2],
+      type: elems[3] === "" ? undefined : elems[3],
+    };
+  } else {
+    return undefined;
+  }
+}
+
+let _fetchTimeEntry: SavedAttributes<TE> | undefined;
 interface fetchTimeEntryArgs {
   te: DataMapper<TE>;
   user: string;
@@ -80,9 +123,11 @@ interface fetchTimeEntryArgs {
 export async function fetchTimeEntry(
   { te, user, offset, yyyymmdd }: fetchTimeEntryArgs,
 ): Promise<SavedAttributes<TE>> {
+  if (_fetchTimeEntry) return _fetchTimeEntry;
   const _yyyymmdd = yyyymmdd ?? todayYYYYMMDD(offset);
   const response = await te.findById(`${user}-${_yyyymmdd}`);
-  return response.item;
+  _fetchTimeEntry = response.item;
+  return _fetchTimeEntry;
 }
 
 interface fetchMonthTimeEntriesArgs {
@@ -131,6 +176,8 @@ export async function fetchAllMemberMonthTimeEntries(
   }
   return result;
 }
+
+let _fetchRecentTimeEntries: SavedAttributes<TE>[] | undefined;
 interface fetchRecentTimeEntriesArgs {
   te: DataMapper<TE>;
   user: string;
@@ -143,6 +190,7 @@ export async function fetchRecentTimeEntries({
   yyyymm,
   limit,
 }: fetchRecentTimeEntriesArgs): Promise<SavedAttributes<TE>[]> {
+  if (_fetchRecentTimeEntries) return _fetchRecentTimeEntries;
   const monthsToSearch: string[] = [yyyymm];
   let year = yyyymm.substring(0, 4);
   let month = yyyymm.substring(4, 6);
@@ -167,7 +215,8 @@ export async function fetchRecentTimeEntries({
     if (!a.user_and_date || !b.user_and_date) return 0;
     return a.user_and_date > b.user_and_date ? 1 : -1;
   });
-  return items;
+  _fetchRecentTimeEntries = items;
+  return _fetchRecentTimeEntries;
 }
 
 interface saveTimeEntryArgs {
@@ -180,6 +229,10 @@ export async function saveTimeEntry(
   return (await te.save({ attributes })).item;
 }
 
+// -----------------------------------------
+// UserSettings
+// -----------------------------------------
+
 interface saveUserSettingsArgs {
   us: DataMapper<US>;
   attributes: Attributes<US>;
@@ -190,15 +243,9 @@ export async function saveUserSettings(
   return (await us.save({ attributes })).item;
 }
 
-interface saveProjectArgs {
-  p: DataMapper<P>;
-  attributes: Attributes<P>;
-}
-export async function saveProject(
-  { p, attributes }: saveProjectArgs,
-): Promise<SavedAttributes<P>> {
-  return (await p.save({ attributes })).item;
-}
+// -----------------------------------------
+// Countries
+// -----------------------------------------
 
 interface fetchAllCountriesArgs {
   c: DataMapper<C>;
@@ -207,6 +254,20 @@ export async function fetchAllCountries(
   { c }: fetchAllCountriesArgs,
 ): Promise<SavedAttributes<C>[]> {
   return (await c.findAll()).items;
+}
+
+// -----------------------------------------
+// Projects
+// -----------------------------------------
+
+interface saveProjectArgs {
+  p: DataMapper<P>;
+  attributes: Attributes<P>;
+}
+export async function saveProject(
+  { p, attributes }: saveProjectArgs,
+): Promise<SavedAttributes<P>> {
+  return (await p.save({ attributes })).item;
 }
 
 interface fetchAllProjectsArgs {
@@ -244,49 +305,4 @@ export async function fetchProject(
 ): Promise<SavedAttributes<P>> {
   const response = await p.findById(code);
   return response.item;
-}
-
-export interface TimeEntry {
-  start: string;
-  end: string;
-  project_code: string | undefined;
-}
-export interface EnhancedTimeEntry extends TimeEntry {
-  // This can be used only in app code, not in the datastore
-  type: string | undefined;
-}
-
-export function serializeTimeEntry(entry: TimeEntry): string {
-  return `${entry.start},${entry.end || ""},${entry.project_code || ""}`;
-}
-
-export function deserializeTimeEntry(
-  value: string,
-): EnhancedTimeEntry | undefined {
-  if (!value) return undefined;
-  const elems = value.split(",");
-  if (elems.length === 2) {
-    return {
-      start: elems[0],
-      end: elems[1] ? elems[1] : "",
-      project_code: undefined,
-      type: undefined,
-    };
-  } else if (elems.length === 3) {
-    return {
-      start: elems[0],
-      end: elems[1] ? elems[1] : "",
-      project_code: elems[2] === "" ? undefined : elems[2],
-      type: undefined,
-    };
-  } else if (elems.length === 4) {
-    return {
-      start: elems[0],
-      end: elems[1] ? elems[1] : "",
-      project_code: elems[2] === "" ? undefined : elems[2],
-      type: elems[3] === "" ? undefined : elems[3],
-    };
-  } else {
-    return undefined;
-  }
 }

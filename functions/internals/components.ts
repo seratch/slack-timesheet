@@ -9,7 +9,6 @@ import {
   AUMapper,
   C,
   CMapper,
-  fetchUserDetails,
   OP,
   OPMapper,
   P,
@@ -22,6 +21,7 @@ import {
   USMapper,
 } from "./datastore.ts";
 import { PrivateMetadata } from "./private_metadata.ts";
+import { fetchUserDetails } from "./slack_api.ts";
 
 export interface ComponentParams {
   env: Env;
@@ -70,7 +70,7 @@ export async function injectComponents(
   const logLevel = isDebugMode ? "DEBUG" : "INFO";
   const slackApi = new SlackAPI(token, { logLevel });
   const user = user_id;
-  const userInfo = await fetchUserDetails(slackApi, user_id);
+  const userInfo = await fetchUserDetails({ slackApi, user: user_id });
   if (!userInfo.user) {
     throw new Error(
       `Unexpectedly failed to fetch users.info data! (user: ${user_id})`,
@@ -96,18 +96,27 @@ export async function injectComponents(
   }
 
   const ph = PHMapper(client, logLevel);
+  let _holidays: SavedAttributes<PH> | undefined;
   const holidays = async () => {
+    if (_holidays) return _holidays;
     const year = _yyyymmdd.substring(0, 4);
-    return (await ph.findById(`${country}-${year}`)).item;
+    _holidays = (await ph.findById(`${country}-${year}`)).item;
+    return _holidays;
   };
 
+  let _canAccessAdminFeature: boolean | undefined;
   const au = AUMapper(client, logLevel);
   const canAccessAdminFeature = async () => {
+    if (_canAccessAdminFeature) return _canAccessAdminFeature;
     const items = (await au.findAll({ limit: 1 })).items;
     const noAdminUsers = items === undefined || items.length === 0;
-    if (noAdminUsers) return true;
+    if (noAdminUsers) {
+      _canAccessAdminFeature = true;
+      return _canAccessAdminFeature;
+    }
     const thisUserCanAccess = (await au.findById(user)).item.user !== undefined;
-    return thisUserCanAccess;
+    _canAccessAdminFeature = thisUserCanAccess;
+    return _canAccessAdminFeature;
   };
 
   return {
