@@ -1033,7 +1033,7 @@ export default SlackFunction(
       }
     },
   ).addViewSubmissionHandler(
-    CallbackId.EditProjct,
+    CallbackId.EditProject,
     async (args) => {
       const { view } = args;
       const components = await injectComponents({ ...args });

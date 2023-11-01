@@ -10,7 +10,7 @@ import {
   todayYYYYMMDD,
 } from "./datetime.ts";
 import { deserializeTimeEntry, PH, TE } from "./datastore.ts";
-import { Emoji, EntryType, Label } from "./constants.ts";
+import { CountryCode, Emoji, EntryType, Label } from "./constants.ts";
 
 export interface ReportTimeEntry {
   type: string;
@@ -31,9 +31,13 @@ export interface ProjectWork {
 export interface DailyReport {
   date: string;
   work_hours: number;
+  overtime_work_hours: number | undefined;
+  night_shift_work_hours: number | undefined;
   break_time_hours: number;
   time_off_hours: number;
   work_minutes: number;
+  overtime_work_minutes: number | undefined;
+  night_shift_work_minutes: number | undefined;
   break_time_minutes: number;
   time_off_minutes: number;
   entries: ReportTimeEntry[];
@@ -51,12 +55,17 @@ export interface MonthlyReport {
   user_id: string;
   user_email: string;
   holidays: number;
+  num_of_working_days: number;
   entry_hours: number;
   work_hours: number;
+  overtime_work_hours: number | undefined;
+  night_shift_work_hours: number | undefined;
   break_time_hours: number;
   time_off_hours: number;
   entry_minutes: number;
   work_minutes: number;
+  overtime_work_minutes: number | undefined;
+  night_shift_work_minutes: number | undefined;
   break_time_minutes: number;
   time_off_minutes: number;
   daily_reports: DailyReport[];
@@ -70,6 +79,7 @@ interface generateReportArgs {
   items: SavedAttributes<TE>[];
   offset: number;
   language: string;
+  country: string | undefined;
   holidays: () => Promise<SavedAttributes<PH> | undefined>;
 }
 export async function generateReport({
@@ -79,6 +89,7 @@ export async function generateReport({
   items,
   offset,
   language,
+  country,
   holidays,
 }: generateReportArgs): Promise<MonthlyReport> {
   const yyyymm = month.replace("/", "");
@@ -88,13 +99,18 @@ export async function generateReport({
     month,
     user_id: user,
     user_email: email,
+    num_of_working_days: 0,
     holidays: numOfHolidays,
     entry_hours: 0,
     work_hours: 0,
+    overtime_work_hours: undefined,
+    night_shift_work_hours: undefined,
     break_time_hours: 0,
     time_off_hours: 0,
     entry_minutes: 0,
     work_minutes: 0,
+    overtime_work_minutes: undefined,
+    night_shift_work_minutes: undefined,
     break_time_minutes: 0,
     time_off_minutes: 0,
     daily_reports: [],
@@ -104,11 +120,27 @@ export async function generateReport({
     const dailyReport = generateDailyReport({
       item,
       offset,
+      country,
       language,
     });
     if (dailyReport) {
+      if (dailyReport.work_minutes > 0) {
+        report.num_of_working_days += 1;
+      }
       report.daily_reports.push(dailyReport);
       report.work_minutes += dailyReport.work_minutes;
+      if (dailyReport.overtime_work_minutes) {
+        if (report.overtime_work_minutes === undefined) {
+          report.overtime_work_minutes = 0;
+        }
+        report.overtime_work_minutes += dailyReport.overtime_work_minutes;
+      }
+      if (dailyReport.night_shift_work_minutes) {
+        if (report.night_shift_work_minutes === undefined) {
+          report.night_shift_work_minutes = 0;
+        }
+        report.night_shift_work_minutes += dailyReport.night_shift_work_minutes;
+      }
       report.break_time_minutes += dailyReport.break_time_minutes;
       report.time_off_minutes += dailyReport.time_off_minutes;
       report.entry_minutes = report.work_minutes +
@@ -131,6 +163,17 @@ export async function generateReport({
         }
       }
     }
+  }
+  report.work_hours = Math.floor(report.work_minutes / 6) / 10;
+  if (report.overtime_work_minutes) {
+    report.overtime_work_hours = Math.floor(
+      report.overtime_work_minutes / 6,
+    ) / 10;
+  }
+  if (report.night_shift_work_minutes) {
+    report.night_shift_work_hours = Math.floor(
+      report.night_shift_work_minutes / 6,
+    ) / 10;
   }
   report.work_hours = Math.floor(report.work_minutes / 6) / 10;
   report.break_time_hours = Math.floor(report.break_time_minutes / 6) / 10;
@@ -170,11 +213,13 @@ function calculateDuratinMinutes(start: string, end: string): number {
 interface generateDailyReportArgs {
   item: SavedAttributes<TE>;
   offset: number;
+  country: string | undefined;
   language: string;
 }
 export function generateDailyReport({
   item,
   offset,
+  country,
   language,
 }: generateDailyReportArgs): DailyReport | undefined {
   if (!item.user_and_date) {
@@ -311,6 +356,8 @@ export function generateDailyReport({
     }
   }
 
+  let overtimeWorkMinutes: number | undefined = undefined;
+  let nightShiftWorkMinutes: number | undefined = undefined;
   let workMinutes = 0;
   let breakTimeMinutes = 0;
   let timeOffMinutes = 0;
@@ -319,12 +366,26 @@ export function generateDailyReport({
       const minutes = calculateDuratinMinutes(e.start, e.end);
       if (e.type === EntryType.Work) {
         workMinutes += minutes;
+        if (country === CountryCode.Japan) {
+          if (timeToNumber(e.end) > 2200) {
+            if (nightShiftWorkMinutes === undefined) nightShiftWorkMinutes = 0;
+            nightShiftWorkMinutes += calculateDuratinMinutes("22:00", e.end);
+          }
+          if (timeToNumber(e.start) < 500) {
+            if (nightShiftWorkMinutes === undefined) nightShiftWorkMinutes = 0;
+            nightShiftWorkMinutes += calculateDuratinMinutes(e.start, "05:00");
+          }
+        }
       } else if (e.type === EntryType.BreakTime) {
         breakTimeMinutes += minutes;
       } else if (e.type === EntryType.TimeOff) {
         timeOffMinutes += minutes;
       }
     }
+  }
+  if (workMinutes > 8 * 60) {
+    if (overtimeWorkMinutes === undefined) overtimeWorkMinutes = 0;
+    overtimeWorkMinutes += workMinutes - 8 * 60;
   }
   const yyyymmdd = item.user_and_date.split("-")[1];
   const date = toDateFormat(offset, yyyymmdd);
@@ -342,9 +403,17 @@ export function generateDailyReport({
   return {
     date,
     work_minutes: workMinutes,
+    overtime_work_minutes: overtimeWorkMinutes,
+    night_shift_work_minutes: nightShiftWorkMinutes,
     break_time_minutes: breakTimeMinutes,
     time_off_minutes: timeOffMinutes,
     work_hours: Math.floor(workMinutes / 6) / 10,
+    overtime_work_hours: overtimeWorkMinutes !== undefined
+      ? Math.floor(overtimeWorkMinutes / 6) / 10
+      : undefined,
+    night_shift_work_hours: nightShiftWorkMinutes !== undefined
+      ? Math.floor(nightShiftWorkMinutes / 6) / 10
+      : undefined,
     break_time_hours: Math.floor(breakTimeMinutes / 6) / 10,
     time_off_hours: Math.floor(timeOffMinutes / 6) / 10,
     entries,
@@ -355,18 +424,22 @@ export function generateDailyReport({
 import {
   AnyMessageBlock,
   AnyModalBlock,
+  MrkdwnTextField,
   SlackAPIClient,
 } from "slack-web-api-client/mod.ts";
+import { LaborLawComplianceValidator } from "./labor_laws.ts";
 
 interface shareReportJSONFileArgs {
   report: MonthlyReport;
   user: string;
+  country: string | undefined;
   language: string;
   yyyymmdd: string;
   slackApi: SlackAPIClient;
 }
 export async function shareReportJSONFile({
   report,
+  country,
   language,
   user,
   yyyymmdd,
@@ -377,6 +450,7 @@ export async function shareReportJSONFile({
   const blocks: AnyMessageBlock[] = toReportResultBlocks(
     report,
     [],
+    country,
     language,
   ) as AnyMessageBlock[];
   const filename = `${user}-${yyyymmdd.substring(0, 6)}.json`;
@@ -409,12 +483,27 @@ export async function shareReportJSONFile({
 export function toReportResultBlocks(
   report: MonthlyReport,
   blocks: (AnyMessageBlock | AnyModalBlock)[],
+  country: string | undefined,
   language: string,
 ): (AnyMessageBlock | AnyModalBlock)[] {
   const wDuration = [
     hourDuration(report.work_hours, language),
     minuteDuration(report.work_minutes, language),
   ].filter((e) => e).join(" ");
+  const owDuration =
+    (report.overtime_work_hours && report.overtime_work_minutes
+      ? [
+        hourDuration(report.overtime_work_hours, language),
+        minuteDuration(report.overtime_work_minutes, language),
+      ].filter((e) => e)
+      : []).join(" ");
+  const nswDuration =
+    (report.night_shift_work_hours && report.night_shift_work_minutes
+      ? [
+        hourDuration(report.night_shift_work_hours, language),
+        minuteDuration(report.night_shift_work_minutes, language),
+      ].filter((e) => e)
+      : []).join(" ");
   const btDuration = [
     hourDuration(report.break_time_hours, language),
     minuteDuration(report.break_time_minutes, language),
@@ -425,9 +514,24 @@ export function toReportResultBlocks(
   ].filter((e) => e).join(" ");
 
   const summary = [];
+  summary.push(
+    Emoji.Work + " " + i18n(Label.NumOfWorkingDays, language) + ": " +
+      dayDuration(report.num_of_working_days, language),
+  );
   if (wDuration) {
     summary.push(
       Emoji.Work + " " + i18n(Label.Work, language) + ": " + wDuration,
+    );
+  }
+  if (owDuration) {
+    summary.push(
+      Emoji.Work + " " + i18n(Label.OvertimeWork, language) + ": " + owDuration,
+    );
+  }
+  if (nswDuration) {
+    summary.push(
+      Emoji.Work + " " + i18n(Label.NightShiftWork, language) + ": " +
+        nswDuration,
     );
   }
   if (btDuration) {
@@ -457,6 +561,18 @@ export function toReportResultBlocks(
       );
     }
   }
+  let warnings: string[] = [];
+  if (report && country) {
+    const validator = new LaborLawComplianceValidator(country);
+    warnings = validator.validateMonthlyReport({ report, language });
+  }
+  if (warnings && warnings.length > 0) {
+    const elements: MrkdwnTextField[] = warnings.map((w) => {
+      return { "type": "mrkdwn", "text": Emoji.Warning + " " + w };
+    });
+    summary.push({ "type": "context", "elements": elements });
+  }
+
   blocks.push({
     "type": "section",
     "text": {

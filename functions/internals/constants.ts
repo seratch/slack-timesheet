@@ -14,7 +14,7 @@ export class CallbackId {
   // Admin Menu
   static ProjectMainView = "project_main_view";
   static AddProject = "add_project";
-  static EditProjct = "edit_project";
+  static EditProject = "edit_project";
   static OrganizationPolicies = "organization_policies";
   static AdminReportDownload = "admin_report_download";
 }
@@ -91,6 +91,7 @@ export class Emoji {
   static MonthlyReport = ":bookmark_tabs:";
   static UserSettings = ":gear:";
   static AdminOnly = ":lock:";
+  static Warning = ":warning:";
 }
 
 export class Label {
@@ -106,16 +107,19 @@ export class Label {
   static Language = "Language";
   static Country = "Country";
   static Work = "Work";
+  static OvertimeWork = "Overtime Work";
+  static NightShiftWork = "Night Shift Work";
   static BreakTime = "Break time";
   static TimeOff = "Time off";
   static Holiday = "Holiday";
+  static NumOfWorkingDays = "Num of Working Days";
   static BackToToday = "Today";
   static UserSettings = "User Settings";
   static Calendar = "Calendar";
   static MonthlyReport = "Monthly Report";
   static AdminMenu = "Admin Menu";
   static ProjectMain = "Projects";
-  static ProjectSummary = "Project Summary";
+  static ProjectSummary = "Projects";
   static AddProject = "Add Project";
   static EditProject = "Edit Project";
   static ProjectSettings = "Project Settings";
@@ -175,6 +179,17 @@ export class Label {
   static ProjectCodeTextValidationError =
     "A project code can consist of alphanumeric characters, dashes (-), and underscores(_).";
   static CodeAlreadyExists = "The code already exists";
+
+  // Labor laws
+  static LaborLawOfJapan_BreakTimeFor6WorkHours =
+    "Under the Labor Laws of Japan, you are entitled to a 45-minute break if your working time exceeds 6 hours.";
+  static LaborLawOfJapan_BreakTimeFor8WorkHours =
+    "Under the Labor Laws of Japan, you are entitled to a 1-hour break if your working time exceeds 8 hours.";
+}
+
+export class LanguageCode {
+  static Japanese = "ja";
+  static English = "en";
 }
 
 export class EntryType {

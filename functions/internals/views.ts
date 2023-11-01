@@ -6,6 +6,7 @@ import {
   Checkboxes,
   ExternalSelect,
   ModalView,
+  MrkdwnTextField,
   PlainTextField,
   PlainTextInput,
   PlainTextOption,
@@ -60,6 +61,7 @@ import {
 
 import { View } from "deno-slack-sdk/functions/interactivity/view_types.ts";
 import { OrganizationPolices } from "./organization_policies.ts";
+import { LaborLawComplianceValidator } from "./labor_laws.ts";
 
 // -----------------------------------------
 // view.state.values utility
@@ -248,6 +250,7 @@ interface syncMainViewArgs {
   slackApi: SlackAPIClient;
   offset: number;
   language: string;
+  country: string | undefined;
   holidays: () => Promise<SavedAttributes<PH> | undefined>;
   canAccessAdminFeature: () => Promise<boolean>;
   yyyymmdd: string | undefined;
@@ -258,6 +261,7 @@ export async function syncMainView({
   slackApi,
   offset,
   language,
+  country,
   holidays,
   yyyymmdd,
   canAccessAdminFeature,
@@ -279,6 +283,7 @@ export async function syncMainView({
         item: entryForTheDay,
         offset,
         language,
+        country,
         holidays,
         canAccessAdminFeature,
         yyyymmdd,
@@ -294,6 +299,7 @@ interface toMainViewArgs {
   view: ModalView;
   offset: number;
   language: string;
+  country: string | undefined;
   item: SavedAttributes<TE>;
   holidays: () => Promise<SavedAttributes<PH> | undefined>;
   yyyymmdd: string | undefined;
@@ -306,6 +312,7 @@ export async function toMainView(
     view,
     offset,
     language,
+    country,
     item,
     holidays,
     yyyymmdd,
@@ -320,6 +327,7 @@ export async function toMainView(
     canAccessAdminFeature,
     offset,
     language,
+    country,
     item,
     holidays,
     yyyymmdd,
@@ -333,6 +341,7 @@ interface mainViewBlocksArgs {
   canAccessAdminFeature: () => Promise<boolean>;
   offset: number;
   language: string;
+  country: string | undefined;
   item: SavedAttributes<TE>;
   holidays: () => Promise<SavedAttributes<PH> | undefined>;
   yyyymmdd: string | undefined;
@@ -343,6 +352,7 @@ export async function mainViewBlocks({
   canAccessAdminFeature,
   offset,
   language,
+  country,
   item,
   holidays,
   yyyymmdd,
@@ -494,8 +504,9 @@ export async function mainViewBlocks({
     },
   ];
 
+  const r = generateDailyReport({ item, offset, language, country });
+
   let report = " ";
-  const r = generateDailyReport({ item, offset, language });
   if (r && r.work_minutes + r.break_time_hours + r.time_off_minutes > 0) {
     if (isDebugMode) {
       console.log(
@@ -507,6 +518,20 @@ export async function mainViewBlocks({
       hourDuration(r.work_hours, language),
       minuteDuration(r.work_minutes, language),
     ].filter((e) => e).join(" ");
+    const overtimeWorkDuration =
+      (r.overtime_work_hours && r.overtime_work_minutes
+        ? [
+          hourDuration(r.overtime_work_hours, language),
+          minuteDuration(r.overtime_work_minutes, language),
+        ].filter((e) => e)
+        : []).join(" ");
+    const nightShiftWorkDuration =
+      (r.night_shift_work_hours && r.night_shift_work_minutes
+        ? [
+          hourDuration(r.night_shift_work_hours, language),
+          minuteDuration(r.night_shift_work_minutes, language),
+        ].filter((e) => e)
+        : []).join(" ");
     const breakTimeDuration = [
       hourDuration(r.break_time_hours, language),
       minuteDuration(r.break_time_minutes, language),
@@ -521,6 +546,18 @@ export async function mainViewBlocks({
         Emoji.Work + " *" + i18n(Label.Work, language) + ":* " + workDuration,
       );
     }
+    if (overtimeWorkDuration) {
+      reportItems.push(
+        Emoji.Work + " *" + i18n(Label.OvertimeWork, language) + ":* " +
+          overtimeWorkDuration,
+      );
+    }
+    if (nightShiftWorkDuration) {
+      reportItems.push(
+        Emoji.Work + " *" + i18n(Label.NightShiftWork, language) + ":* " +
+          nightShiftWorkDuration,
+      );
+    }
     if (breakTimeDuration) {
       reportItems.push(
         Emoji.BreakTime + " *" + i18n(Label.BreakTime, language) + ":* " +
@@ -532,6 +569,17 @@ export async function mainViewBlocks({
         Emoji.TimeOff + " *" + i18n(Label.TimeOff, language) + ":* " +
           timeOffDuration,
       );
+    }
+    if (r.projects && r.projects.length > 0) {
+      reportItems.push("");
+      reportItems.push("*" + i18n(Label.ProjectSummary, language) + "*");
+      for (const p of r.projects) {
+        reportItems.push(
+          "*" + p.project_code + "*: " +
+            hourDuration(p.work_hours, language) + " " +
+            minuteDuration(p.work_minutes, language),
+        );
+      }
     }
     report = reportItems.join("\n");
   }
@@ -550,9 +598,22 @@ export async function mainViewBlocks({
     },
   });
 
+  let warnings: string[] = [];
+  if (r && country) {
+    const validator = new LaborLawComplianceValidator(country);
+    warnings = validator.validateDailyReport({ report: r, language });
+  }
+  if (warnings && warnings.length > 0) {
+    const elements: MrkdwnTextField[] = warnings.map((w) => {
+      return { "type": "mrkdwn", "text": Emoji.Warning + " " + w };
+    });
+    topBlocks.push({ "type": "context", "elements": elements });
+  }
+
   if (entryBlocks.length > 0) {
     topBlocks.push({ "type": "divider" });
   }
+
   if (isToday) {
     const StartWorkButton = quickButton({
       action_id: ActionId.StartWork,
@@ -867,6 +928,7 @@ interface toReportResultViewArgs {
   items: SavedAttributes<TE>[];
   offset: number;
   language: string;
+  country: string | undefined;
   holidays: () => Promise<SavedAttributes<PH> | undefined>;
   isDebugMode: boolean;
 }
@@ -878,6 +940,7 @@ export async function toReportResultView({
   items,
   offset,
   language,
+  country,
   holidays,
   isDebugMode,
 }: toReportResultViewArgs): Promise<ModalView> {
@@ -888,6 +951,7 @@ export async function toReportResultView({
     items,
     offset,
     language,
+    country,
     holidays,
   });
   if (isDebugMode) {
@@ -920,7 +984,7 @@ export async function toReportResultView({
     },
   });
   view.blocks.push({ "type": "divider" });
-  toReportResultBlocks(report, view.blocks, language);
+  toReportResultBlocks(report, view.blocks, country, language);
   return view;
 }
 
@@ -1440,7 +1504,7 @@ export function newEditProjectView({
   const privateMetaedata: EditProjectPrivateMetadata = { code };
   return {
     "type": "modal",
-    "callback_id": CallbackId.EditProjct,
+    "callback_id": CallbackId.EditProject,
     "title": TitleAddProject(language),
     "submit": Submit(language),
     "close": Back(language),

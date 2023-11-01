@@ -13,9 +13,12 @@ labels[Label.RefreshButton] = { "ja": "更新" };
 labels[Label.Language] = { "ja": "言語" };
 labels[Label.Country] = { "ja": "国" };
 labels[Label.Work] = { "ja": "勤務" };
+labels[Label.OvertimeWork] = { "ja": "時間外" };
+labels[Label.NightShiftWork] = { "ja": "深夜" };
 labels[Label.BreakTime] = { "ja": "休憩" };
 labels[Label.TimeOff] = { "ja": "休暇" };
 labels[Label.Holiday] = { "ja": "祝日" };
+labels[Label.NumOfWorkingDays] = { "ja": "出勤日数" };
 labels[Label.BackToToday] = { "ja": "今日の画面へ移動" };
 labels[Label.UserSettings] = { "ja": "ユーザー設定" };
 labels[Label.Calendar] = { "ja": "カレンダー" };
@@ -25,7 +28,7 @@ labels[Label.ProjectSettings] = { "ja": "プロジェクト設定" };
 labels[Label.OrganizationPolicies] = { "ja": "組織ポリシー" };
 labels[Label.AdminReportDownload] = { "ja": "管理者向けレポートダウンロード" };
 labels[Label.ProjectMain] = { "ja": "プロジェクト" };
-labels[Label.ProjectSummary] = { "ja": "プロジェクトのサマリー" };
+labels[Label.ProjectSummary] = { "ja": "プロジェクト" };
 labels[Label.AddProject] = { "ja": "プロジェクト追加" };
 labels[Label.EditProject] = { "ja": "プロジェクト編集" };
 labels[Label.StartWork] = { "ja": "勤務開始" };
@@ -87,6 +90,13 @@ labels[Label.TooLongInput] = { "ja": "入力が長すぎます" };
 labels[Label.CodeAlreadyExists] = { "ja": "このコードはすでに存在しています" };
 labels[Label.ProjectCodeTextValidationError] = {
   "ja": "コードには英数字か '-', '_' のみを使用できます",
+};
+// Labor law
+labels[Label.LaborLawOfJapan_BreakTimeFor6WorkHours] = {
+  "ja": "労働時間が 6 時間を超える場合 45 分間の休憩をとることができます。",
+};
+labels[Label.LaborLawOfJapan_BreakTimeFor8WorkHours] = {
+  "ja": "労働時間が 8 時間を超える場合 1 時間の休憩をとることができます。",
 };
 
 export function i18n(english: string, language: string): string {
