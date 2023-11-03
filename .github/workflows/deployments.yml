@@ -43,5 +43,4 @@ jobs:
         mkdir -p .slack/
         echo $SLACK_APPS_JSON > .slack/apps.json
         echo $SLACK_CONFIG_JSON > .slack/config.json
-        # slack upgrade -s
         slack deploy -s --token $SLACK_SERVICE_TOKEN
