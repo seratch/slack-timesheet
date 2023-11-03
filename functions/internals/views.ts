@@ -555,8 +555,11 @@ export async function mainViewBlocks({
   ];
 
   const r = generateDailyReport({ entry, lifelog, offset, language, country });
+  if (isDebugMode) {
+    console.log(`### Generated daily report: ${JSON.stringify(r, null, 2)}`);
+  }
 
-  let report = " ";
+  const reportItems = [];
   if (r && r.work_minutes + r.break_time_hours + r.time_off_minutes > 0) {
     if (isDebugMode) {
       console.log(
@@ -590,7 +593,6 @@ export async function mainViewBlocks({
       hourDuration(r.time_off_hours, language),
       minuteDuration(r.time_off_minutes, language),
     ].filter((e) => e).join(" ");
-    const reportItems = [];
     if (workDuration) {
       reportItems.push(
         Emoji.Work + " *" + i18n(Label.Work, language) + ":* " + workDuration,
@@ -641,12 +643,22 @@ export async function mainViewBlocks({
         );
       }
     }
-    report = reportItems.join("\n");
   }
+  if (r && r.lifelogs && r.lifelogs.length > 0) {
+    reportItems.push("");
+    for (const log of r.lifelogs) {
+      reportItems.push(
+        "*" + Emoji.Lifelog + " " + log.what_to_do + "*: " +
+          hourDuration(log.spent_hours, language) + " " +
+          minuteDuration(log.spent_minutes, language),
+      );
+    }
+  }
+  const report = reportItems.join("\n");
 
   topBlocks.push({
     "type": "section",
-    "text": { "type": "mrkdwn", "text": report },
+    "text": { "type": "mrkdwn", "text": report + " " },
     "accessory": {
       "type": "button",
       "action_id": ActionId.Refresh,

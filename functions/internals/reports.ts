@@ -263,7 +263,7 @@ export function generateDailyReport({
   country,
   language,
 }: generateDailyReportArgs): DailyReport | undefined {
-  if (!entry.user_and_date) {
+  if (!entry.user_and_date && !lifelog?.user_and_date) {
     return undefined;
   }
   const id = entry.user_and_date;
@@ -474,7 +474,8 @@ export function generateDailyReport({
     if (overtimeWorkMinutes === undefined) overtimeWorkMinutes = 0;
     overtimeWorkMinutes += workMinutes - 8 * 60;
   }
-  const yyyymmdd = entry.user_and_date.split("-")[1];
+  const yyyymmdd =
+    (entry.user_and_date || lifelog!.user_and_date!).split("-")[1];
   const date = toDateFormat(offset, yyyymmdd);
 
   let projects: ProjectWork[] | undefined = undefined;
