@@ -13,9 +13,11 @@ import PublicHolidays from "../../datastores/public_holidays.ts";
 import AdminUsers from "../../datastores/admin_users.ts";
 import Projects from "../../datastores/projects.ts";
 import OrganizationPolicies from "../../datastores/organization_policies.ts";
+import Lifelogs from "../../datastores/lifelogs.ts";
 
-import { todayYYYYMMDD } from "./datetime.ts";
+import { timeToNumber, todayYYYYMMDD } from "./datetime.ts";
 import { CountryCode, Label } from "./constants.ts";
+import { deserializeEntry, serializeEntry } from "./entries.ts";
 
 export type LogLevel = "DEBUG" | "INFO";
 
@@ -26,12 +28,13 @@ export type PH = typeof PublicHolidays.definition;
 export type AU = typeof AdminUsers.definition;
 export type P = typeof Projects.definition;
 export type OP = typeof OrganizationPolicies.definition;
+export type L = typeof Lifelogs.definition;
 
 // -----------------------------------------
 // DataMapper initializer
 // -----------------------------------------
 
-function createDataMapper<DEF extends TE | US | C | PH | AU | P | OP>(
+function createDataMapper<DEF extends TE | US | C | PH | AU | P | OP | L>(
   def: DEF,
   client: Client,
   logLevel: LogLevel,
@@ -64,55 +67,13 @@ export function PMapper(client: Client, logLevel: LogLevel): DataMapper<P> {
 export function OPMapper(client: Client, logLevel: LogLevel): DataMapper<OP> {
   return createDataMapper(OrganizationPolicies.definition, client, logLevel);
 }
+export function LMapper(client: Client, logLevel: LogLevel): DataMapper<L> {
+  return createDataMapper(Lifelogs.definition, client, logLevel);
+}
 
 // -----------------------------------------
 // TimeEntries
 // -----------------------------------------
-
-export interface TimeEntry {
-  start: string;
-  end: string;
-  project_code: string | undefined;
-}
-export interface EnhancedTimeEntry extends TimeEntry {
-  // This can be used only in app code, not in the datastore
-  type: string | undefined;
-}
-
-export function serializeTimeEntry(entry: TimeEntry): string {
-  return `${entry.start},${entry.end || ""},${entry.project_code || ""}`;
-}
-
-export function deserializeTimeEntry(
-  value: string,
-): EnhancedTimeEntry | undefined {
-  if (!value) return undefined;
-  const elems = value.split(",");
-  if (elems.length === 2) {
-    return {
-      start: elems[0],
-      end: elems[1] ? elems[1] : "",
-      project_code: undefined,
-      type: undefined,
-    };
-  } else if (elems.length === 3) {
-    return {
-      start: elems[0],
-      end: elems[1] ? elems[1] : "",
-      project_code: elems[2] === "" ? undefined : elems[2],
-      type: undefined,
-    };
-  } else if (elems.length === 4) {
-    return {
-      start: elems[0],
-      end: elems[1] ? elems[1] : "",
-      project_code: elems[2] === "" ? undefined : elems[2],
-      type: elems[3] === "" ? undefined : elems[3],
-    };
-  } else {
-    return undefined;
-  }
-}
 
 interface fetchTimeEntryArgs {
   te: DataMapper<TE>;
@@ -125,7 +86,57 @@ export async function fetchTimeEntry(
 ): Promise<SavedAttributes<TE>> {
   const _yyyymmdd = yyyymmdd ?? todayYYYYMMDD(offset);
   const response = await te.findById(`${user}-${_yyyymmdd}`);
-  return response.item;
+  const item = response.item;
+  // For legacy format compatibility; TODO: remove this in the future
+  if (item.work_entries) {
+    for (let i = 0; i < item.work_entries.length; i++) {
+      if (!item.work_entries[i].startsWith("{")) {
+        item.work_entries[i] = serializeEntry(item.work_entries[i]);
+      }
+    }
+  }
+  // For legacy format compatibility; TODO: remove this in the future
+  if (item.break_time_entries) {
+    for (let i = 0; i < item.break_time_entries.length; i++) {
+      if (!item.break_time_entries[i].startsWith("{")) {
+        item.break_time_entries[i] = serializeEntry(item.break_time_entries[i]);
+      }
+    }
+  }
+  // For legacy format compatibility; TODO: remove this in the future
+  if (item.time_off_entries) {
+    for (let i = 0; i < item.time_off_entries.length; i++) {
+      if (!item.time_off_entries[i].startsWith("{")) {
+        item.time_off_entries[i] = serializeEntry(item.time_off_entries[i]);
+      }
+    }
+  }
+
+  if (item.work_entries) {
+    item.work_entries.sort((a, b) =>
+      timeToNumber(deserializeEntry(a)!.start) >
+          timeToNumber(deserializeEntry(b)!.start)
+        ? 1
+        : -1
+    );
+  }
+  if (item.break_time_entries) {
+    item.break_time_entries.sort((a, b) =>
+      timeToNumber(deserializeEntry(a)!.start) >
+          timeToNumber(deserializeEntry(b)!.start)
+        ? 1
+        : -1
+    );
+  }
+  if (item.time_off_entries) {
+    item.time_off_entries.sort((a, b) =>
+      timeToNumber(deserializeEntry(a)!.start) >
+          timeToNumber(deserializeEntry(b)!.start)
+        ? 1
+        : -1
+    );
+  }
+  return item;
 }
 
 interface fetchMonthTimeEntriesArgs {
@@ -222,6 +233,110 @@ export async function saveTimeEntry(
   { te, attributes }: saveTimeEntryArgs,
 ): Promise<SavedAttributes<TE>> {
   return (await te.save({ attributes })).item;
+}
+
+// -----------------------------------------
+// Lifelogs
+// -----------------------------------------
+
+export const isLifelogRecord = (
+  entry: SavedAttributes<L> | SavedAttributes<TE>,
+): entry is SavedAttributes<L> => {
+  return (entry as SavedAttributes<TE>).work_entries === undefined;
+};
+
+interface fetchLifelogArgs {
+  l: DataMapper<L>;
+  user: string;
+  offset: number;
+  yyyymmdd: string | undefined;
+}
+export async function fetchLifelog(
+  { l, user, offset, yyyymmdd }: fetchLifelogArgs,
+): Promise<SavedAttributes<L>> {
+  const _yyyymmdd = yyyymmdd ?? todayYYYYMMDD(offset);
+  const response = await l.findById(`${user}-${_yyyymmdd}`);
+  const item = response.item;
+  if (item.logs) {
+    item.logs.sort((a, b) => {
+      return timeToNumber(deserializeEntry(a)!.start) >
+          timeToNumber(deserializeEntry(b)!.start)
+        ? 1
+        : -1;
+    });
+  }
+  return item;
+}
+
+interface saveLifelogArgs {
+  l: DataMapper<L>;
+  attributes: Attributes<L>;
+}
+export async function saveLifelog(
+  { l, attributes }: saveLifelogArgs,
+): Promise<SavedAttributes<L>> {
+  return (await l.save({ attributes })).item;
+}
+
+interface fetchMonthLifelogsArgs {
+  l: DataMapper<L>;
+  user: string;
+  yyyymm: string;
+}
+export async function fetchMonthLifelogs(
+  { l, user, yyyymm }: fetchMonthLifelogsArgs,
+): Promise<SavedAttributes<L>[]> {
+  const where = {
+    user_and_date: {
+      value: `${user}-${yyyymm}`,
+      operator: Operator.BeginsWith,
+    },
+  };
+  const monthlyEntries = await l.findAllBy({ where });
+  const items = monthlyEntries.items.sort((a, b) => {
+    if (!a.user_and_date || !b.user_and_date) return 0;
+    return a.user_and_date > b.user_and_date ? 1 : -1;
+  });
+  return items;
+}
+
+interface fetchRecentLifelogsArgs {
+  l: DataMapper<L>;
+  user: string;
+  yyyymm: string;
+  limit: number;
+}
+export async function fetchRecentLifelogs({
+  l,
+  user,
+  yyyymm,
+  limit,
+}: fetchRecentLifelogsArgs): Promise<SavedAttributes<L>[]> {
+  const monthsToSearch: string[] = [yyyymm];
+  let year = yyyymm.substring(0, 4);
+  let month = yyyymm.substring(4, 6);
+  if (month === "01") {
+    year = (Number.parseInt(year) - 1).toString();
+    month = "12";
+  } else {
+    month = (Number.parseInt(month) - 1).toString();
+  }
+  monthsToSearch.push(year + ("00" + month).slice(-2));
+  const conditions = monthsToSearch.map((_yyyymm) => {
+    return {
+      user_and_date: {
+        value: `${user}-${_yyyymm}`,
+        operator: Operator.BeginsWith,
+      },
+    };
+  });
+  const where = { or: conditions };
+  const logs = await l.findAllBy({ where, limit });
+  const items = logs.items.sort((a, b) => {
+    if (!a.user_and_date || !b.user_and_date) return 0;
+    return a.user_and_date > b.user_and_date ? 1 : -1;
+  });
+  return items;
 }
 
 // -----------------------------------------

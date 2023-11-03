@@ -10,7 +10,7 @@ const datastore = DefineDatastore(
       work_entries: {
         type: Schema.types.array,
         items: {
-          // start(HH:MM),end(HH:MM),project_code
+          // JSON format: start, end, project_code
           type: Schema.types.string,
         },
         required: true,
@@ -18,7 +18,7 @@ const datastore = DefineDatastore(
       break_time_entries: {
         type: Schema.types.array,
         items: {
-          // start(HH:MM),end(HH:MM),
+          // JSON format: start, end
           type: Schema.types.string,
         },
         required: false,
@@ -26,7 +26,7 @@ const datastore = DefineDatastore(
       time_off_entries: {
         type: Schema.types.array,
         items: {
-          // start(HH:MM),end(HH:MM),
+          // JSON format: start, end
           type: Schema.types.string,
         },
         required: false,

@@ -64,11 +64,11 @@ export async function isManualEntryPermitted(
   return true;
 }
 
-interface fetchDefaultCountryArgs {
+interface fetchOrganizationCountryIdArgs {
   op: DataMapper<OP>;
 }
-export async function fetchDefaultCountryId(
-  { op }: fetchDefaultCountryArgs,
+export async function fetchOrganizationCountryId(
+  { op }: fetchOrganizationCountryIdArgs,
 ): Promise<string | undefined> {
   const row = await op.findById(OrganizationPolicyKey.Country);
   return row.item.value;

@@ -1,8 +1,37 @@
 import { DataMapper, SavedAttributes } from "deno-slack-data-mapper/mod.ts";
-import { deserializeTimeEntry, P, TE } from "./datastore.ts";
+
 import { BlockId, EntryType, Label } from "./constants.ts";
+import { P, TE } from "./datastore.ts";
 import { timeToNumber } from "./datetime.ts";
+import { deserializeEntry, serializeEntry } from "./entries.ts";
 import { i18n } from "./i18n.ts";
+
+// -----------------------------------------
+// Lifelog
+// -----------------------------------------
+
+interface validateLifelogArgs {
+  start: string;
+  end: string;
+  what_to_do: string;
+  language: string;
+}
+export function validateLifelog(
+  { start, end, what_to_do, language }: validateLifelogArgs,
+): Record<string, string> {
+  const errors: Record<string, string> = {};
+  const _start = timeToNumber(start);
+  const _end = end && end !== "" ? timeToNumber(end) : undefined;
+  if (_end && _start >= _end) {
+    errors[BlockId.End] = i18n(Label.InvalidStartAndEnd, language);
+    return errors;
+  }
+  if (what_to_do.length > 50) {
+    // You can customize as necessary
+    errors[BlockId.WhatToDo] = i18n(Label.TooLongInput, language);
+  }
+  return errors;
+}
 
 // -----------------------------------------
 // Time Entry
@@ -14,15 +43,16 @@ interface validateTimeEntrySubmissionArgs {
   end: string;
   project_code: string | undefined;
   edit_target: string | undefined;
-  item: SavedAttributes<TE>;
+  entry: SavedAttributes<TE>;
   language: string;
 }
 
 export function validateTimeEntrySubmission(
-  { type, start, end, edit_target, item, language }:
+  { type, start, end, edit_target, entry, language }:
     validateTimeEntrySubmissionArgs,
 ): Record<string, string> {
   const errors: Record<string, string> = {};
+  const editTarget = edit_target ? serializeEntry(edit_target) : undefined;
   const _start = timeToNumber(start);
   const _end = end && end !== "" ? timeToNumber(end) : undefined;
   if (_end && _start >= _end) {
@@ -30,13 +60,13 @@ export function validateTimeEntrySubmission(
     return errors;
   }
   if (_end && type === EntryType.Work) {
-    for (const entry of (item.work_entries || [])) {
-      if (entry === edit_target) {
+    for (const e of (entry.work_entries || [])) {
+      if (editTarget && serializeEntry(e) === editTarget) {
         continue;
       }
       const errors = detectTimeEntryConflicts({
         language,
-        rawEntry: entry,
+        rawEntry: e,
         start: _start,
         end: _end,
       });
@@ -45,13 +75,13 @@ export function validateTimeEntrySubmission(
       }
     }
   } else if (_end && type === EntryType.BreakTime) {
-    for (const entry of (item.break_time_entries || [])) {
-      if (entry === edit_target) {
+    for (const e of (entry.break_time_entries || [])) {
+      if (editTarget && serializeEntry(e) === editTarget) {
         continue;
       }
       const errors = detectTimeEntryConflicts({
         language,
-        rawEntry: entry,
+        rawEntry: e,
         start: _start,
         end: _end,
       });
@@ -60,13 +90,13 @@ export function validateTimeEntrySubmission(
       }
     }
   } else if (_end && type === EntryType.TimeOff) {
-    for (const entry of (item.time_off_entries || [])) {
-      if (entry === edit_target) {
+    for (const e of (entry.time_off_entries || [])) {
+      if (editTarget && serializeEntry(e) === editTarget) {
         continue;
       }
       const errors = detectTimeEntryConflicts({
         language,
-        rawEntry: entry,
+        rawEntry: e,
         start: _start,
         end: _end,
       });
@@ -88,7 +118,7 @@ function detectTimeEntryConflicts(
   { language, rawEntry, start, end }: detectTimeEntryConflictsArgs,
 ): Record<string, string> | undefined {
   const errors: Record<string, string> = {};
-  const entry = deserializeTimeEntry(rawEntry);
+  const entry = deserializeEntry(rawEntry);
   if (!entry) return undefined;
 
   const [s, e] = [timeToNumber(entry.start), timeToNumber(entry.end)];

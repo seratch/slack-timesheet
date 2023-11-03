@@ -21,21 +21,14 @@ import {
   hourDuration,
   minuteDuration,
   nowHHMM,
+  timeToNumber,
   toDateFormat,
   todayForDatepicker,
   todayYYYYMMDD,
 } from "./datetime.ts";
-import {
-  C,
-  deserializeTimeEntry,
-  EnhancedTimeEntry,
-  OP,
-  P,
-  PH,
-  serializeTimeEntry,
-  TE,
-  US,
-} from "./datastore.ts";
+import { C, L, OP, P, PH, TE, US } from "./datastore.ts";
+import { deserializeEntry, Entry, Lifelog, serializeEntry } from "./entries.ts";
+
 import {
   generateDailyReport,
   generateReport,
@@ -45,6 +38,7 @@ import {
 import {
   ActionId,
   AdminMenuItem,
+  AppModeCode,
   BlockId,
   CallbackId,
   Emoji,
@@ -54,9 +48,11 @@ import {
 } from "./constants.ts";
 import {
   AddEntryPrivateMetadata,
+  AddLifelogPrivateMetadata,
   EditEntryPrivateMetadata,
   EditProjectPrivateMetadata,
   MainViewPrivateMetadata,
+  ManualEntryPrivateMetadata,
   ReportPrivateMetadata,
 } from "./private_metadata.ts";
 
@@ -113,7 +109,7 @@ export function newView(language: string): ModalView {
   return {
     "type": "modal",
     "title": TitleMain(language),
-    "close": QuitThisApp(language),
+    "close": QuitApp(language),
     "blocks": [],
   };
 }
@@ -135,11 +131,18 @@ export function TitleStartWorkWithProjectCode(
   return buildTitle(i18n(Label.StartWork, language));
 }
 
+export function TitleManualEntry(language: string): PlainTextField {
+  return buildTitle(i18n(Label.ManualEntry, language));
+}
 export function TitleAddEntry(language: string): PlainTextField {
   return buildTitle(i18n(Label.AddEntry, language));
 }
 export function TitleEditEntry(language: string): PlainTextField {
   return buildTitle(i18n(Label.EditEntry, language));
+}
+
+export function TitleStartLifelog(language: string): PlainTextField {
+  return buildTitle(i18n(Label.StartLifelog, language));
 }
 
 // ----------------------
@@ -193,7 +196,7 @@ export function ReceiveReportInDM(language: string): PlainTextField {
     "text": i18n(Label.ReceiveReportInDM, language),
   };
 }
-export function QuitThisApp(language: string): PlainTextField {
+export function QuitApp(language: string): PlainTextField {
   return { "type": "plain_text", "text": i18n(Label.QuitApp, language) };
 }
 export function Submit(language: string): PlainTextField {
@@ -239,15 +242,40 @@ export function CountryOptions(
   return options;
 }
 
+// ----------------------
+// AppMode options
+// ----------------------
+
+export function AppModeOptions(language: string): PlainTextOption[] {
+  const options: PlainTextOption[] = [];
+  for (
+    const appMode of [
+      { code: AppModeCode.Work, label: Label.AppMode_WorkOnly },
+      {
+        code: AppModeCode.WorkAndLifelogs,
+        label: Label.AppMode_WorkAndLifelogs,
+      },
+    ]
+  ) {
+    options.push({
+      "text": { "type": "plain_text", "text": i18n(appMode.label, language) },
+      "value": appMode.code,
+    });
+  }
+  return options;
+}
+
 // -----------------------------------------
 // Main view
 // -----------------------------------------
 
 interface syncMainViewArgs {
   isDebugMode: boolean;
+  isLifelogEnabled: boolean;
   manualEntryPermitted: boolean;
   viewId: string;
-  entryForTheDay: SavedAttributes<TE>;
+  entry: SavedAttributes<TE>;
+  lifelog: SavedAttributes<L> | undefined;
   slackApi: SlackAPIClient;
   offset: number;
   language: string;
@@ -258,7 +286,8 @@ interface syncMainViewArgs {
 }
 export async function syncMainView({
   viewId,
-  entryForTheDay,
+  entry,
+  lifelog,
   slackApi,
   offset,
   language,
@@ -267,6 +296,7 @@ export async function syncMainView({
   yyyymmdd,
   canAccessAdminFeature,
   isDebugMode,
+  isLifelogEnabled,
   manualEntryPermitted,
 }: syncMainViewArgs) {
   const privateMetadata: MainViewPrivateMetadata = { yyyymmdd };
@@ -277,11 +307,13 @@ export async function syncMainView({
       "callback_id": CallbackId.MainView,
       "private_metadata": JSON.stringify(privateMetadata),
       "title": TitleMain(language),
-      "close": QuitThisApp(language),
+      "close": QuitApp(language),
       "blocks": await mainViewBlocks({
         isDebugMode,
+        isLifelogEnabled,
         manualEntryPermitted,
-        item: entryForTheDay,
+        entry: entry,
+        lifelog: lifelog,
         offset,
         language,
         country,
@@ -297,11 +329,13 @@ interface toMainViewArgs {
   isDebugMode: boolean;
   manualEntryPermitted: boolean;
   canAccessAdminFeature: () => Promise<boolean>;
+  isLifelogEnabled: boolean;
   view: ModalView;
   offset: number;
   language: string;
   country: string | undefined;
-  item: SavedAttributes<TE>;
+  entry: SavedAttributes<TE>;
+  lifelog: SavedAttributes<L> | undefined;
   holidays: () => Promise<SavedAttributes<PH> | undefined>;
   yyyymmdd: string | undefined;
 }
@@ -310,11 +344,13 @@ export async function toMainView(
     isDebugMode,
     manualEntryPermitted,
     canAccessAdminFeature,
+    isLifelogEnabled,
     view,
     offset,
     language,
     country,
-    item,
+    entry,
+    lifelog,
     holidays,
     yyyymmdd,
   }: toMainViewArgs,
@@ -325,11 +361,13 @@ export async function toMainView(
   view.blocks = await mainViewBlocks({
     isDebugMode,
     manualEntryPermitted,
+    isLifelogEnabled,
     canAccessAdminFeature,
     offset,
     language,
     country,
-    item,
+    entry,
+    lifelog,
     holidays,
     yyyymmdd,
   });
@@ -338,69 +376,77 @@ export async function toMainView(
 
 interface mainViewBlocksArgs {
   isDebugMode: boolean;
+  isLifelogEnabled: boolean;
   manualEntryPermitted: boolean;
   canAccessAdminFeature: () => Promise<boolean>;
   offset: number;
   language: string;
   country: string | undefined;
-  item: SavedAttributes<TE>;
+  entry: SavedAttributes<TE>;
+  lifelog: SavedAttributes<L> | undefined;
   holidays: () => Promise<SavedAttributes<PH> | undefined>;
   yyyymmdd: string | undefined;
 }
 export async function mainViewBlocks({
   isDebugMode,
+  isLifelogEnabled,
   manualEntryPermitted,
   canAccessAdminFeature,
   offset,
   language,
   country,
-  item,
+  entry,
+  lifelog,
   holidays,
   yyyymmdd,
 }: mainViewBlocksArgs): Promise<AnyModalBlock[]> {
-  const entries = (item.work_entries || []).map((e) => {
-    const entry = deserializeTimeEntry(e)!;
-    return entry.start + "," +
-      (entry.end || "") + "," +
-      (entry.project_code || "") + "," +
-      EntryType.Work;
+  interface MainViewItem {
+    type: string;
+    start: string;
+    end?: string;
+    what_to_do?: string | undefined;
+    project_code?: string | undefined;
+  }
+  const entries: MainViewItem[] = (entry.work_entries || []).map((e) => {
+    const entry = deserializeEntry(e)!;
+    const item: MainViewItem = { ...entry, type: EntryType.Work };
+    return item;
   })
-    .concat(
-      (item.break_time_entries || []).map((e) => {
-        const entry = deserializeTimeEntry(e)!;
-        return entry.start + "," +
-          (entry.end || "") + "," +
-          (entry.project_code || "") + "," +
-          EntryType.BreakTime;
-      }),
-    )
-    .concat(
-      (item.time_off_entries || []).map((e) => {
-        const entry = deserializeTimeEntry(e)!;
-        return entry.start + "," +
-          (entry.end || "") + "," +
-          (entry.project_code || "") + "," +
-          EntryType.TimeOff;
-      }),
-    )
-    .sort();
+    .concat((entry.break_time_entries || []).map((e) => {
+      const entry = deserializeEntry(e)!;
+      const item: MainViewItem = { ...entry, type: EntryType.BreakTime };
+      return item;
+    }))
+    .concat((entry.time_off_entries || []).map((e) => {
+      const entry = deserializeEntry(e)!;
+      const item: MainViewItem = { ...entry, type: EntryType.TimeOff };
+      return item;
+    }))
+    .concat((lifelog && lifelog.logs || []).map((raw) => {
+      const entry = deserializeEntry(raw!) as Lifelog;
+      const item: MainViewItem = { ...entry, type: EntryType.Lifelog };
+      return item;
+    }))
+    .sort((a, b) => timeToNumber(a.start) > timeToNumber(b.start) ? 1 : -1);
 
   const entryBlocks: AnyModalBlock[] = [];
+  const doingLifelog = lifelog?.logs
+    ? lifelog.logs.filter((l) => {
+      const end = (deserializeEntry(l) as Lifelog).end;
+      return end === undefined || end === "";
+    })?.length > 0
+    : false;
   let businessHours = false;
   let breakTime = false;
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
-    const entryWithType = deserializeTimeEntry(entry);
-    if (!entryWithType) continue;
-    const { start, end, project_code, type } = entryWithType;
+    const { start, end, project_code, what_to_do, type } = entry;
     let typeLabel = "";
     let emoji = "";
     if (type === EntryType.Work) {
-      if (project_code) {
-        typeLabel = i18n(Label.Work, language) + " [" + project_code + "]";
-      } else {
-        typeLabel = i18n(Label.Work, language);
-      }
+      const workTypeLabel = i18n(Label.Work, language);
+      typeLabel = workTypeLabel;
+      if (project_code) typeLabel += " [" + project_code + "]";
       emoji = Emoji.Work;
     } else if (type === EntryType.BreakTime) {
       typeLabel = i18n(Label.BreakTime, language);
@@ -408,20 +454,23 @@ export async function mainViewBlocks({
     } else if (type === EntryType.TimeOff) {
       typeLabel = i18n(Label.TimeOff, language);
       emoji = Emoji.TimeOff;
+    } else if (type === EntryType.Lifelog) {
+      typeLabel = what_to_do!;
+      emoji = Emoji.Lifelog;
     }
     const options: PlainTextOption[] = [];
     if (manualEntryPermitted) {
       options.push({
         "text": { "type": "plain_text", "text": i18n(Label.Edit, language) },
-        "value": `edit___${entry}`,
+        "value": `edit___${JSON.stringify(entry)}`,
       });
     }
     options.push({
       "text": { "type": "plain_text", "text": i18n(Label.Delete, language) },
-      "value": `delete___${entry}`,
+      "value": `delete___${JSON.stringify(entry)}`,
     });
     if (end === undefined) end === "";
-    const label = `*${emoji} ${typeLabel}:* ${start} - ${end}`;
+    const label = `*${emoji} ${typeLabel}:* ${start} - ${end || ""}`;
     entryBlocks.push({
       "type": "section",
       "text": { "type": "mrkdwn", "text": label },
@@ -505,7 +554,7 @@ export async function mainViewBlocks({
     },
   ];
 
-  const r = generateDailyReport({ item, offset, language, country });
+  const r = generateDailyReport({ entry, lifelog, offset, language, country });
 
   let report = " ";
   if (r && r.work_minutes + r.break_time_hours + r.time_off_minutes > 0) {
@@ -582,6 +631,16 @@ export async function mainViewBlocks({
         );
       }
     }
+    if (r.lifelogs && r.lifelogs.length > 0) {
+      reportItems.push("");
+      for (const log of r.lifelogs) {
+        reportItems.push(
+          "*" + Emoji.Lifelog + " " + log.what_to_do + "*: " +
+            hourDuration(log.spent_hours, language) + " " +
+            minuteDuration(log.spent_minutes, language),
+        );
+      }
+    }
     report = reportItems.join("\n");
   }
 
@@ -644,44 +703,71 @@ export async function mainViewBlocks({
       style: "danger",
       language,
     });
+    const StartLifelogButton = quickButton({
+      action_id: ActionId.StartLifelogInput,
+      emoji: Emoji.Lifelog,
+      label: Label.StartLifelog,
+      style: "primary",
+      language,
+    });
+    const FinishLifelogButton = quickButton({
+      action_id: ActionId.FinishLifelog,
+      emoji: Emoji.Lifelog,
+      label: Label.FinishLifelog,
+      style: "danger",
+      language,
+    });
 
-    if (businessHours) {
-      if (breakTime) {
-        topBlocks.push({
-          "type": "actions",
-          "elements": [FinishBreakTimeButton],
-        });
-      } else {
-        topBlocks.push({
-          "type": "actions",
-          "elements": [StartBreakTimeButton, FinishWorkButton],
-        });
-      }
-    } else {
+    if (doingLifelog) {
       topBlocks.push({
         "type": "actions",
-        "elements": [StartWorkButton, StartBreakTimeButton],
+        "elements": [FinishLifelogButton],
       });
+    } else {
+      if (businessHours) {
+        if (breakTime) {
+          topBlocks.push({
+            "type": "actions",
+            "elements": [FinishBreakTimeButton],
+          });
+        } else {
+          topBlocks.push({
+            "type": "actions",
+            "elements": [StartBreakTimeButton, FinishWorkButton],
+          });
+        }
+      } else {
+        if (isLifelogEnabled) {
+          topBlocks.push({
+            "type": "actions",
+            "elements": [StartWorkButton, StartLifelogButton],
+          });
+        } else {
+          topBlocks.push({
+            "type": "actions",
+            "elements": [StartWorkButton, StartBreakTimeButton],
+          });
+        }
+      }
     }
   }
   const blocks = topBlocks.concat(entryBlocks);
-  if (manualEntryPermitted) {
-    if (entryBlocks.length != 0) {
-      blocks.push({ "type": "divider" });
-    }
+
+  blocks.push({ "type": "divider" });
+
+  if (manualEntryPermitted || isLifelogEnabled) {
     blocks.push({
-      "type": "actions",
-      "elements": [
-        {
-          "type": "button",
-          "action_id": ActionId.AddEntry,
-          "text": {
-            "type": "plain_text",
-            "text": i18n(Label.AddAnEntry, language),
-          },
-          "value": "1",
+      "type": "section",
+      "text": { "type": "mrkdwn", "text": " " },
+      "accessory": {
+        "type": "button",
+        "action_id": ActionId.ManualEntry,
+        "text": {
+          "type": "plain_text",
+          "text": Emoji.Writing + " " + i18n(Label.ManualEntry, language),
         },
-      ],
+        "value": "1",
+      },
     });
   }
   return blocks;
@@ -752,12 +838,12 @@ export function toUserSettingsView({
       "initial_option": selectedLanguage,
     },
   });
-  const options = CountryOptions(countries, language);
+  const countryOptions = CountryOptions(countries, language);
   const countryId = settings.country_id ?? defaultCountryId;
-  if (options && options.length > 0) {
-    let selectedOption = options.find((c) => c.value === countryId);
+  if (countryOptions && countryOptions.length > 0) {
+    let selectedOption = countryOptions.find((c) => c.value === countryId);
     if (!selectedOption) {
-      selectedOption = options.find((c) => c.value === country);
+      selectedOption = countryOptions.find((c) => c.value === country);
     }
     view.blocks.push({
       "type": "input",
@@ -766,12 +852,28 @@ export function toUserSettingsView({
       "element": {
         "type": "static_select",
         "action_id": ActionId.Input,
-        "options": options,
+        "options": countryOptions,
         "initial_option": selectedOption,
       },
       "optional": true,
     });
   }
+
+  const appModeOptions: PlainTextOption[] = AppModeOptions(language);
+  const selectedAppModeOption =
+    appModeOptions.find((c) => c.value === settings.app_mode) ||
+    appModeOptions[0];
+  view.blocks.push({
+    "type": "input",
+    "block_id": BlockId.AppMode,
+    "label": { "type": "plain_text", "text": i18n(Label.AppMode, language) },
+    "element": {
+      "type": "static_select",
+      "action_id": ActionId.Input,
+      "options": appModeOptions,
+      "initial_option": selectedAppModeOption,
+    },
+  });
   return view;
 }
 
@@ -787,7 +889,7 @@ export function toStartWorkWithProjectCodeView({
   view,
   language,
 }: toStartWorkWithProjectCodeViewArgs): ModalView {
-  view.callback_id = CallbackId.StartWorkWithProjectCode;
+  view.callback_id = CallbackId.StartWorkWithProject;
   view.title = TitleStartWorkWithProjectCode(language);
   view.submit = Submit(language);
   view.close = Back(language);
@@ -804,6 +906,34 @@ export function toStartWorkWithProjectCodeView({
       "min_query_length": 0,
     },
     "optional": true,
+  });
+  return view;
+}
+
+// -----------------------------------------
+// StartLifelog view
+// -----------------------------------------
+
+interface toStartLifelogViewArgs {
+  view: ModalView;
+  language: string;
+}
+export function toStartLifelogView(
+  { view, language }: toStartLifelogViewArgs,
+): ModalView {
+  view.callback_id = CallbackId.StartLifelog;
+  view.title = TitleStartLifelog(language);
+  view.submit = Submit(language);
+  view.close = Back(language);
+  view.blocks.push({
+    "type": "input",
+    "block_id": BlockId.WhatToDo,
+    "label": { "type": "plain_text", "text": i18n(Label.WhatToDo, language) },
+    "element": {
+      "type": "external_select",
+      "action_id": ActionId.LifelogSearch,
+      "min_query_length": 0,
+    },
   });
   return view;
 }
@@ -841,11 +971,13 @@ interface toReportStartViewArgs {
   view: ModalView;
   offset: number;
   language: string;
+  isLifelogEnabled: boolean;
 }
 export function toReportStartView({
   view,
   offset,
   language,
+  isLifelogEnabled,
 }: toReportStartViewArgs): ModalView {
   const yyyymmdd = todayYYYYMMDD(offset);
   view.callback_id = CallbackId.ReportStart;
@@ -862,7 +994,7 @@ export function toReportStartView({
     });
   }
   reportStartBlocks(
-    { language, offset, blocks: view.blocks },
+    { language, offset, isLifelogEnabled, blocks: view.blocks },
   );
   return view;
 }
@@ -871,9 +1003,10 @@ interface reportStartBlocksArgs {
   language: string;
   offset: number;
   blocks: AnyModalBlock[];
+  isLifelogEnabled: boolean;
 }
 function reportStartBlocks(
-  { language, offset, blocks }: reportStartBlocksArgs,
+  { language, offset, blocks, isLifelogEnabled }: reportStartBlocksArgs,
 ) {
   const yyyymmdd = todayYYYYMMDD(offset);
   const currentYear = Number.parseInt(yyyymmdd.substring(0, 4));
@@ -922,6 +1055,31 @@ function reportStartBlocks(
       },
     },
   });
+
+  if (isLifelogEnabled) {
+    const option: PlainTextOption = {
+      "text": {
+        "type": "plain_text",
+        "text": i18n(Label.IncludeLifelogs, language),
+      },
+      "value": "1",
+    };
+    blocks.push({
+      "type": "input",
+      "block_id": BlockId.IncludeLifelogs,
+      "label": {
+        "type": "plain_text",
+        "text": i18n(Label.IncludeLifelogs, language),
+      },
+      "element": {
+        "type": "checkboxes",
+        "action_id": ActionId.Input,
+        "options": [option],
+        "initial_options": [option],
+      },
+      "optional": true,
+    });
+  }
 }
 
 interface toReportResultViewArgs {
@@ -929,7 +1087,8 @@ interface toReportResultViewArgs {
   month: string;
   user: string;
   email: string;
-  items: SavedAttributes<TE>[];
+  entries: SavedAttributes<TE>[];
+  lifelogs: SavedAttributes<L>[];
   offset: number;
   language: string;
   country: string | undefined;
@@ -941,7 +1100,8 @@ export async function toReportResultView({
   user,
   email,
   month,
-  items,
+  entries,
+  lifelogs,
   offset,
   language,
   country,
@@ -952,7 +1112,8 @@ export async function toReportResultView({
     user,
     email,
     month,
-    items,
+    entries,
+    lifelogs,
     offset,
     language,
     country,
@@ -993,102 +1154,198 @@ export async function toReportResultView({
 }
 
 // -----------------------------------------
+// Manual Entry view
+// -----------------------------------------
+
+interface newManualEntryViewArgs {
+  isLifelogEnabled: boolean;
+  manualEntryPermitted: boolean;
+  language: string;
+  yyyymmdd: string | undefined;
+}
+export function newManualEntryView({
+  isLifelogEnabled,
+  manualEntryPermitted,
+  language,
+  yyyymmdd,
+}: newManualEntryViewArgs): ModalView {
+  const privateMetadata: ManualEntryPrivateMetadata = { yyyymmdd };
+  const options: PlainTextOption[] = [];
+  if (manualEntryPermitted) {
+    options.push({
+      "text": {
+        "type": "plain_text",
+        "text": Emoji.Work + " " + i18n(Label.Work, language),
+      },
+      "value": EntryType.Work,
+    });
+    options.push({
+      "text": {
+        "type": "plain_text",
+        "text": Emoji.BreakTime + " " + i18n(Label.BreakTime, language),
+      },
+      "value": EntryType.BreakTime,
+    });
+    options.push({
+      "text": {
+        "type": "plain_text",
+        "text": Emoji.TimeOff + " " + i18n(Label.TimeOff, language),
+      },
+      "value": EntryType.TimeOff,
+    });
+  }
+  if (isLifelogEnabled) {
+    options.push({
+      "text": {
+        "type": "plain_text",
+        "text": Emoji.Lifelog + " " + i18n(Label.Lifelog, language),
+      },
+      "value": EntryType.Lifelog,
+    });
+  }
+  return {
+    "type": "modal",
+    "callback_id": CallbackId.ManualEntry,
+    "title": TitleManualEntry(language),
+    "close": Back(language),
+    "private_metadata": JSON.stringify(privateMetadata),
+    "blocks": [
+      {
+        "type": "section",
+        "block_id": BlockId.Type,
+        "text": {
+          "type": "mrkdwn",
+          "text": Emoji.Writing + " *" +
+            i18n(Label.SelectManualEntryType, language) + "*",
+        },
+        "accessory": {
+          "type": "radio_buttons",
+          "action_id": ActionId.SelectManualEntryType,
+          "options": options,
+        },
+      },
+    ],
+  };
+}
+
+// -----------------------------------------
+// Add Lifelog view
+// -----------------------------------------
+
+interface newAddLifelogViewArgs {
+  holidays: () => Promise<SavedAttributes<PH> | undefined>;
+  offset: number;
+  language: string;
+  yyyymmdd: string;
+}
+export async function newAddLifelogView({
+  holidays,
+  offset,
+  language,
+  yyyymmdd,
+}: newAddLifelogViewArgs): Promise<ModalView> {
+  const privateMetadata: AddLifelogPrivateMetadata = { yyyymmdd };
+  const time = nowHHMM(offset);
+  const isHoliday = ((await holidays())?.holidays || []).includes(yyyymmdd);
+  const emoji = isHoliday ? Emoji.Holiday : clockEmoji(time);
+  return {
+    "type": "modal",
+    "callback_id": CallbackId.AddLifelog,
+    "title": TitleAddEntry(language),
+    "submit": Submit(language),
+    "close": Back(language),
+    "private_metadata": JSON.stringify(privateMetadata),
+    "blocks": [
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": `${emoji}  *${toDateFormat(offset, yyyymmdd)}*  ${emoji}`,
+        },
+      },
+      {
+        "type": "section",
+        "block_id": BlockId.Type,
+        "text": {
+          "type": "mrkdwn",
+          "text": Emoji.Lifelog + " *" + i18n(Label.Lifelog, language) + "*",
+        },
+      },
+      {
+        "type": "input",
+        "block_id": BlockId.WhatToDo,
+        "label": {
+          "type": "plain_text",
+          "text": i18n(Label.WhatToDo, language),
+        },
+        "element": {
+          "type": "external_select",
+          "action_id": ActionId.LifelogSearch,
+          "min_query_length": 0,
+        },
+      },
+      {
+        "type": "input",
+        "block_id": BlockId.Start,
+        "label": { "type": "plain_text", "text": i18n(Label.Start, language) },
+        "element": { "type": "timepicker", "action_id": ActionId.Input },
+      },
+      {
+        "type": "input",
+        "block_id": BlockId.End,
+        "label": { "type": "plain_text", "text": i18n(Label.End, language) },
+        "element": { "type": "timepicker", "action_id": ActionId.Input },
+      },
+    ],
+  };
+}
+
+// -----------------------------------------
 // Time Entry view
 // -----------------------------------------
 
 interface newAddEntryViewArgs {
   language: string;
-  blocks: AnyModalBlock[];
-  yyyymmdd: string | undefined;
+  yyyymmdd: string;
+  holidays: () => Promise<SavedAttributes<PH> | undefined>;
+  projects: SavedAttributes<P>[] | undefined;
+  entryType: string;
+  offset: number;
 }
-export function newAddEntryView({
+export async function newAddEntryView({
+  holidays,
+  projects,
+  entryType,
+  offset,
   language,
-  blocks,
   yyyymmdd,
-}: newAddEntryViewArgs): ModalView {
-  const privateMetadata: AddEntryPrivateMetadata = { "yyyymmdd": yyyymmdd };
-  return {
+}: newAddEntryViewArgs): Promise<ModalView> {
+  const privateMetadata: AddEntryPrivateMetadata = {
+    entry_type: entryType,
+    yyyymmdd,
+  };
+  const view: ModalView = {
     "type": "modal",
     "callback_id": CallbackId.AddEntry,
     "title": TitleAddEntry(language),
     "submit": Submit(language),
     "close": Back(language),
     "private_metadata": JSON.stringify(privateMetadata),
-    "blocks": blocks,
+    "blocks": [],
   };
-}
 
-interface newEditEntryViewArgs {
-  entry: EnhancedTimeEntry;
-  type: string;
-  language: string;
-  blocks: AnyModalBlock[];
-  yyyymmdd: string | undefined;
-}
-export function newEditEntryView({
-  entry,
-  type,
-  language,
-  blocks,
-  yyyymmdd,
-}: newEditEntryViewArgs): ModalView {
-  const privateMetadata: EditEntryPrivateMetadata = {
-    "edit_target": serializeTimeEntry(entry),
-    "type": type,
-    "yyyymmdd": yyyymmdd,
-  };
-  return {
-    "type": "modal",
-    "callback_id": CallbackId.EditEntry,
-    "title": TitleEditEntry(language),
-    "submit": Submit(language),
-    "close": Back(language),
-    "private_metadata": JSON.stringify(privateMetadata),
-    "blocks": blocks,
-  };
-}
-
-interface newAddEntryBlocksArgs {
-  holidays: () => Promise<SavedAttributes<PH> | undefined>;
-  projects: SavedAttributes<P>[] | undefined;
-  offset: number;
-  language: string;
-  yyyymmdd: string;
-}
-export async function newAddEntryBlocks({
-  holidays,
-  projects,
-  offset,
-  language,
-  yyyymmdd,
-}: newAddEntryBlocksArgs): Promise<AnyModalBlock[]> {
   const time = nowHHMM(offset);
   const isHoliday = ((await holidays())?.holidays || []).includes(yyyymmdd);
   const emoji = isHoliday ? Emoji.Holiday : clockEmoji(time);
-  const entryTypeOptions: PlainTextOption[] = [
-    {
-      "text": {
-        "type": "plain_text",
-        "text": Emoji.Work + " " + i18n(Label.Work, language),
-      },
-      "value": EntryType.Work,
-    },
-    {
-      "text": {
-        "type": "plain_text",
-        "text": Emoji.BreakTime + " " + i18n(Label.BreakTime, language),
-      },
-      "value": EntryType.BreakTime,
-    },
-    {
-      "text": {
-        "type": "plain_text",
-        "text": Emoji.TimeOff + " " + i18n(Label.TimeOff, language),
-      },
-      "value": EntryType.TimeOff,
-    },
-  ];
-  const blocks: AnyModalBlock[] = [
+  let entryTypeLabel = `*${i18n(Label.EntryType, language)}*\n`;
+  if (entryType === EntryType.Work) {
+    entryTypeLabel += Emoji.Work + " " + i18n(Label.Work, language);
+  } else if (entryType === EntryType.BreakTime) {
+    entryTypeLabel += Emoji.BreakTime + " " + i18n(Label.BreakTime, language);
+  } else if (entryType === EntryType.TimeOff) {
+    entryTypeLabel += Emoji.TimeOff + " " + i18n(Label.TimeOff, language);
+  }
+  view.blocks = [
     {
       "type": "section",
       "text": {
@@ -1098,18 +1355,8 @@ export async function newAddEntryBlocks({
     },
     { "type": "divider" },
     {
-      "type": "input",
-      "block_id": BlockId.Type,
-      "label": {
-        "type": "plain_text",
-        "text": i18n(Label.InputType, language),
-      },
-      "element": {
-        "type": "radio_buttons",
-        "action_id": ActionId.Input,
-        "options": entryTypeOptions,
-        "initial_option": entryTypeOptions[0],
-      },
+      "type": "section",
+      "text": { "type": "mrkdwn", "text": entryTypeLabel },
     },
     {
       "type": "input",
@@ -1125,7 +1372,7 @@ export async function newAddEntryBlocks({
     },
   ];
   if (projects && projects.length > 0) {
-    blocks.push({
+    view.blocks.push({
       "type": "input",
       "block_id": BlockId.ProjectCode,
       "label": {
@@ -1140,48 +1387,86 @@ export async function newAddEntryBlocks({
       "optional": true,
     });
   }
-  return blocks;
+  return view;
 }
 
-interface newEditEntryBlocksArgs {
-  p: DataMapper<P>;
-  entry: EnhancedTimeEntry;
+interface newEditEntryViewArgs {
+  entry: Entry;
+  type: string;
   language: string;
+  yyyymmdd: string | undefined;
+  p: DataMapper<P>;
   projectCodeEnabled: boolean;
 }
-export async function newEditEntryBlocks(
-  { p, entry, language, projectCodeEnabled }: newEditEntryBlocksArgs,
-) {
-  let workTypeLabel = " ";
+export async function newEditEntryView({
+  entry,
+  type,
+  language,
+  yyyymmdd,
+  p,
+  projectCodeEnabled,
+}: newEditEntryViewArgs): Promise<ModalView> {
+  const privateMetadata: EditEntryPrivateMetadata = {
+    "edit_target": serializeEntry(entry),
+    "type": type,
+    "yyyymmdd": yyyymmdd,
+  };
+  const view: ModalView = {
+    "type": "modal",
+    "callback_id": CallbackId.EditEntry,
+    "title": TitleEditEntry(language),
+    "submit": Submit(language),
+    "close": Back(language),
+    "private_metadata": JSON.stringify(privateMetadata),
+    "blocks": [],
+  };
+
+  let entryTypeLabel = `*${i18n(Label.EntryType, language)}*\n`;
   if (entry.type === EntryType.Work) {
-    workTypeLabel = Emoji.Work + " " + i18n(Label.Work, language);
+    entryTypeLabel += Emoji.Work + " " + i18n(Label.Work, language);
   } else if (entry.type === EntryType.BreakTime) {
-    workTypeLabel = Emoji.BreakTime + " " + i18n(Label.BreakTime, language);
+    entryTypeLabel += Emoji.BreakTime + " " + i18n(Label.BreakTime, language);
   } else if (entry.type === EntryType.TimeOff) {
-    workTypeLabel = Emoji.TimeOff + " " + i18n(Label.TimeOff, language);
+    entryTypeLabel += Emoji.TimeOff + " " + i18n(Label.TimeOff, language);
+  } else if (entry.type === EntryType.Lifelog) {
+    entryTypeLabel += Emoji.Lifelog + " " + i18n(Label.Lifelog, language);
   }
-  const blocks: AnyModalBlock[] = [
+  view.blocks = [
     {
       "type": "section",
-      "text": {
-        "type": "mrkdwn",
-        "text": "*" + workTypeLabel + "*",
-      },
+      "text": { "type": "mrkdwn", "text": entryTypeLabel },
     },
     { "type": "divider" },
-    {
-      "type": "input",
-      "block_id": BlockId.Start,
-      "label": { "type": "plain_text", "text": i18n(Label.Start, language) },
-      "element": {
-        "type": "timepicker",
-        "action_id": ActionId.Input,
-        "initial_time": entry.start,
-      },
-    },
   ];
+
+  if (entry.type === EntryType.Lifelog) {
+    view.blocks.push({
+      "type": "input",
+      "block_id": BlockId.WhatToDo,
+      "label": { "type": "plain_text", "text": i18n(Label.WhatToDo, language) },
+      "element": {
+        "type": "external_select",
+        "action_id": ActionId.LifelogSearch,
+        "min_query_length": 0,
+        "initial_option": {
+          text: { type: "plain_text", text: entry.what_to_do! },
+          value: entry.what_to_do!,
+        },
+      },
+    });
+  }
+  view.blocks.push({
+    "type": "input",
+    "block_id": BlockId.Start,
+    "label": { "type": "plain_text", "text": i18n(Label.Start, language) },
+    "element": {
+      "type": "timepicker",
+      "action_id": ActionId.Input,
+      "initial_time": entry.start,
+    },
+  });
   if (entry.end !== "") {
-    blocks.push({
+    view.blocks.push({
       "type": "input",
       "block_id": BlockId.End,
       "label": { "type": "plain_text", "text": i18n(Label.End, language) },
@@ -1205,7 +1490,7 @@ export async function newEditEntryBlocks(
         value: project.code,
       };
     }
-    blocks.push({
+    view.blocks.push({
       "type": "input",
       "block_id": BlockId.ProjectCode,
       "label": {
@@ -1216,7 +1501,7 @@ export async function newEditEntryBlocks(
       "optional": true,
     });
   }
-  return blocks;
+  return view;
 }
 
 // -----------------------------------------
@@ -1268,6 +1553,53 @@ export function toAdminMenuView({
     ],
   });
   return view;
+}
+
+// -----------------------------------------
+// Lifelogs
+// -----------------------------------------
+
+interface lifelogSearchResultOptionsArgs {
+  keyword: string;
+  recentLogs: SavedAttributes<L>[];
+}
+export function lifelogSearchResultOptions(
+  { keyword, recentLogs }: lifelogSearchResultOptionsArgs,
+): ExternalSelectOption[] {
+  const ranking: Record<string, number> = {};
+  for (const dailyLogs of recentLogs) {
+    for (const log of dailyLogs.logs) {
+      const e: Lifelog = JSON.parse(log);
+      if (e && e.what_to_do) {
+        ranking[e.what_to_do] = (ranking[e.what_to_do] || 0) + 1;
+      }
+    }
+  }
+  let exactlyMatched = false;
+  const matched = Object.entries(ranking)
+    .filter(([what, _]) => {
+      if (keyword === "") return true;
+      if (!exactlyMatched) exactlyMatched = what === keyword;
+      return what.includes(keyword);
+    })
+    .sort((a, b) => {
+      return a[1] > b[1] ? -1 : 1;
+    })
+    .slice(0, 50);
+
+  const options: ExternalSelectOption[] = matched.map(([what, _]) => {
+    return {
+      text: { type: "plain_text", text: what },
+      value: what,
+    };
+  });
+  if (keyword && !exactlyMatched) {
+    options.push({
+      text: { type: "plain_text", text: keyword },
+      value: keyword,
+    });
+  }
+  return options;
 }
 
 // -----------------------------------------
@@ -1346,12 +1678,12 @@ export function toProjectMainView({
   return view;
 }
 
-interface newAddProjectBlocksArgs {
+interface newAddProjectViewArgs {
   language: string;
 }
-export function newAddProjectBlocks(
-  { language }: newAddProjectBlocksArgs,
-): AnyModalBlock[] {
+export function newAddProjectView({
+  language,
+}: newAddProjectViewArgs): ModalView {
   function label(label: string): PlainTextField {
     return { "type": "plain_text", "text": i18n(label, language) };
   }
@@ -1404,17 +1736,6 @@ export function newAddProjectBlocks(
       "optional": true,
     },
   ];
-  return blocks;
-}
-
-interface newAddProjectViewArgs {
-  language: string;
-  blocks: AnyModalBlock[];
-}
-export function newAddProjectView({
-  language,
-  blocks,
-}: newAddProjectViewArgs): ModalView {
   return {
     "type": "modal",
     "callback_id": CallbackId.AddProject,
@@ -1425,13 +1746,17 @@ export function newAddProjectView({
   };
 }
 
-interface newEditProjectBlocksArgs {
-  item: SavedAttributes<P>;
+interface newEditProjectViewArgs {
+  code: string;
   language: string;
+  project: SavedAttributes<P>;
 }
-export function newEditProjectBlocks(
-  { item, language }: newEditProjectBlocksArgs,
-): AnyModalBlock[] {
+export function newEditProjectView({
+  code,
+  language,
+  project,
+}: newEditProjectViewArgs): ModalView {
+  const privateMetaedata: EditProjectPrivateMetadata = { code };
   function label(label: string): PlainTextField {
     return { "type": "plain_text", "text": i18n(label, language) };
   }
@@ -1458,14 +1783,14 @@ export function newEditProjectBlocks(
     "type": "section",
     "text": {
       "type": "mrkdwn",
-      "text": i18n(Label.ProjectCode, language) + ": " + item.code,
+      "text": i18n(Label.ProjectCode, language) + ": " + project.code,
     },
   });
   blocks.push({
     "type": "input",
     "block_id": BlockId.ProjectName,
     "label": label(Label.ProjectName),
-    "element": plainTextInput(item.name, false),
+    "element": plainTextInput(project.name, false),
     "optional": false,
   });
 
@@ -1474,7 +1799,7 @@ export function newEditProjectBlocks(
     "action_id": ActionId.Input,
     "options": [isActiveOption],
   };
-  if (item.is_active) {
+  if (project.is_active) {
     isActiveBlockElement.initial_options = [isActiveOption];
   }
   blocks.push({
@@ -1489,23 +1814,9 @@ export function newEditProjectBlocks(
     "type": "input",
     "block_id": BlockId.ProjectDescription,
     "label": label(Label.ProjectDescription),
-    "element": plainTextInput(item.description || "", true),
+    "element": plainTextInput(project.description || "", true),
     "optional": true,
   });
-  return blocks;
-}
-
-interface newEditProjectViewArgs {
-  code: string;
-  language: string;
-  blocks: AnyModalBlock[];
-}
-export function newEditProjectView({
-  code,
-  language,
-  blocks,
-}: newEditProjectViewArgs): ModalView {
-  const privateMetaedata: EditProjectPrivateMetadata = { code };
   return {
     "type": "modal",
     "callback_id": CallbackId.EditProject,
@@ -1596,7 +1907,7 @@ export function toAdminReportDownloadView({
     });
   }
   reportStartBlocks(
-    { language, offset, blocks: view.blocks },
+    { language, offset, isLifelogEnabled: false, blocks: view.blocks },
   );
   return view;
 }
@@ -1632,7 +1943,7 @@ export function projectSearchResultOptions({
   const ranking: Record<string, number> = {};
   for (const entry of recentEntries) {
     for (const w of entry.work_entries) {
-      const e = deserializeTimeEntry(w);
+      const e = deserializeEntry(w);
       if (e && e.project_code) {
         ranking[e.project_code] = (ranking[e.project_code] || 0) + 1;
       }

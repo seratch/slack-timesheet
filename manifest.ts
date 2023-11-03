@@ -8,6 +8,7 @@ import PublicHolidays from "./datastores/public_holidays.ts";
 import AdminUsers from "./datastores/admin_users.ts";
 import Projects from "./datastores/projects.ts";
 import OrganizationPolicies from "./datastores/organization_policies.ts";
+import Lifelogs from "./datastores/lifelogs.ts";
 
 export default Manifest({
   name: "Timesheet",
@@ -27,6 +28,7 @@ export default Manifest({
     Projects,
     AdminUsers,
     OrganizationPolicies,
+    Lifelogs,
   ],
   botScopes: [
     "commands",

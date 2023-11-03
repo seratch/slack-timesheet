@@ -12,8 +12,17 @@ export interface ReportPrivateMetadata {
   yyyymmdd: string;
 }
 
+export interface ManualEntryPrivateMetadata {
+  yyyymmdd: string | undefined;
+}
+
+export interface AddLifelogPrivateMetadata {
+  yyyymmdd: string | undefined;
+}
+
 export interface AddEntryPrivateMetadata {
   yyyymmdd: string | undefined;
+  entry_type: string;
 }
 
 export interface EditEntryPrivateMetadata {

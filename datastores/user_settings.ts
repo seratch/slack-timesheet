@@ -10,6 +10,8 @@ const datastore = DefineDatastore(
       language: { type: Schema.types.string, required: true },
       // reference to countries.id
       country_id: { type: Schema.types.string, required: false },
+      // work, work_and_lifelogs
+      app_mode: { type: Schema.types.string, required: false },
     },
   } as const,
 );
