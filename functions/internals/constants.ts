@@ -2,9 +2,12 @@ export class CallbackId {
   // Main
   static MainView = "main_view";
   // Time entries
-  static StartWorkWithProjectCode = "start_work_with_project_code";
+  static StartWorkWithProject = "start_work_with_project";
+  static ManualEntry = "manual_entry";
   static AddEntry = "add_entry";
   static EditEntry = "edit_entry";
+  static StartLifelog = "start_lifelog";
+  static AddLifelog = "add_lifelog";
   // Menu
   static UserSettings = "user_settings";
   static Calendar = "calendar";
@@ -23,12 +26,15 @@ export class BlockId {
   // User settings
   static Language = "language";
   static Country = "country";
-  // Time entries
+  static AppMode = "app_mode";
+  // Time entries / Lifelogs
   static Date = "date";
   static Type = "type";
+  static WhatToDo = "what_to_do";
   static Start = "start";
   static End = "end";
   // Monthly report
+  static IncludeLifelogs = "include_lifelogs";
   static Year = "year";
   static Month = "month";
   // Admin menu
@@ -44,15 +50,20 @@ export class ActionId {
   // input blocks
   static Input = "input"; // default placehoder
   static ProjectCodeSearch = "project_code_search";
+  static LifelogSearch = "lifelog_search";
 
   // section/actions blocks
-  // Time entries
-  static AddEntry = "add_entry";
+  // Time entries / Lifelogs
+  static ManualEntry = "manual_entry";
+  static SelectManualEntryType = "select_manual_entry_type";
+  static AddLifelog = "add_lifelog";
   static EditOrDeleteEntry = "edit_or_delete_entry";
   static StartWork = "start_work";
   static FinishWork = "finish_work";
   static StartBreakTime = "start_break_time";
   static FinishBreakTime = "finish_break_time";
+  static StartLifelogInput = "start_lifelog_input";
+  static FinishLifelog = "finish_lifelog";
   // Menu
   static Menu = "menu";
   static Refresh = "refresh";
@@ -83,6 +94,8 @@ export class Emoji {
   static BreakTime = ":knife_fork_plate:";
   static TimeOff = ":no_bell:";
   static Holiday = ":palm_tree:";
+  static Lifelog = ":ledger:";
+  static Writing = ":writing_hand:";
   static ActiveProject = ":white_check_mark:";
   static SuspendedProject = ":ballot_box_with_check:";
   static Refresh = ":arrows_counterclockwise:";
@@ -106,12 +119,14 @@ export class Label {
   static RefreshButton = "Refresh";
   static Language = "Language";
   static Country = "Country";
+  static AppMode = "App Mode";
   static Work = "Work";
   static OvertimeWork = "Overtime Work";
   static NightShiftWork = "Night Shift Work";
   static BreakTime = "Break time";
   static TimeOff = "Time off";
   static Holiday = "Holiday";
+  static Lifelog = "Lifelog";
   static NumOfWorkingDays = "Num of Working Days";
   static BackToToday = "Today";
   static UserSettings = "User Settings";
@@ -120,6 +135,7 @@ export class Label {
   static AdminMenu = "Admin Menu";
   static ProjectMain = "Projects";
   static ProjectSummary = "Projects";
+  static LifelogSummary = "Lifelogs";
   static AddProject = "Add Project";
   static EditProject = "Edit Project";
   static ProjectSettings = "Project Settings";
@@ -129,13 +145,17 @@ export class Label {
   static FinishWork = "Finish work";
   static StartBreakTime = "Start break time";
   static FinishBreakTime = "Finish break time";
+  static StartLifelog = "Start lifelog";
+  static FinishLifelog = "Finish lifelog";
   static Start = "Start";
   static End = "End";
+  static WhatToDo = "What to do";
+  static IncludeLifelogs = "Include lifelogs";
   static Add = "Add";
   static Edit = "Edit";
   static Delete = "Delete";
-  static AddAnEntry = "Add an entry";
-  static InputType = "Input Type";
+  static ManualEntry = "Manual entry";
+  static EntryType = "Entry Type";
   static Year = "Year";
   static Month = "Month";
   static Date = "Date";
@@ -151,6 +171,13 @@ export class Label {
   // Countries
   static Japan = "Japan";
   static UnitedStates = "United States";
+
+  // AppMode
+  static AppMode_WorkOnly = "Work management";
+  static AppMode_WorkAndLifelogs = "Work and lifelogs";
+
+  // Manual entry
+  static SelectManualEntryType = "Select entry type:";
 
   // Report UI messages
   static HereIsTheReportYouRequested =
@@ -196,9 +223,15 @@ export class EntryType {
   static Work = "work";
   static BreakTime = "break_time";
   static TimeOff = "time_off";
+  static Lifelog = "lifelog";
 }
 
 export class CountryCode {
   static UnitedStates = "us";
   static Japan = "jp";
+}
+
+export class AppModeCode {
+  static Work = "work";
+  static WorkAndLifelogs = "work_and_lifelogs";
 }

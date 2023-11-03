@@ -9,8 +9,9 @@ import {
   toDateFormat,
   todayYYYYMMDD,
 } from "./datetime.ts";
-import { deserializeTimeEntry, PH, TE } from "./datastore.ts";
+import { L, PH, TE } from "./datastore.ts";
 import { CountryCode, Emoji, EntryType, Label } from "./constants.ts";
+import { deserializeEntry } from "./entries.ts";
 
 export interface ReportTimeEntry {
   type: string;
@@ -19,13 +20,20 @@ export interface ReportTimeEntry {
   start: string;
   end: string;
   minutes: number;
-  project_code: string | undefined;
+  project_code: string | undefined; // time entry
+  what_to_do: string | undefined; // lifelog
 }
 
 export interface ProjectWork {
   project_code: string;
   work_hours: number;
   work_minutes: number;
+}
+
+export interface Lifelog {
+  what_to_do: string;
+  spent_hours: number;
+  spent_minutes: number;
 }
 
 export interface DailyReport {
@@ -42,6 +50,7 @@ export interface DailyReport {
   time_off_minutes: number;
   entries: ReportTimeEntry[];
   projects: ProjectWork[] | undefined;
+  lifelogs: Lifelog[] | undefined;
 }
 
 export interface AdminMonthlyReport {
@@ -70,13 +79,15 @@ export interface MonthlyReport {
   time_off_minutes: number;
   daily_reports: DailyReport[];
   projects: ProjectWork[] | undefined;
+  lifelogs: Lifelog[] | undefined;
 }
 
 interface generateReportArgs {
   user: string;
   email: string;
   month: string;
-  items: SavedAttributes<TE>[];
+  entries: SavedAttributes<TE>[];
+  lifelogs: SavedAttributes<L>[];
   offset: number;
   language: string;
   country: string | undefined;
@@ -86,7 +97,8 @@ export async function generateReport({
   user,
   email,
   month,
-  items,
+  entries,
+  lifelogs,
   offset,
   language,
   country,
@@ -115,10 +127,15 @@ export async function generateReport({
     time_off_minutes: 0,
     daily_reports: [],
     projects: undefined,
+    lifelogs: undefined,
   };
-  for (const item of items) {
+  for (const entry of entries) {
+    const lifelog = lifelogs.find((l) =>
+      l.user_and_date === entry.user_and_date
+    );
     const dailyReport = generateDailyReport({
-      item,
+      entry,
+      lifelog,
       offset,
       country,
       language,
@@ -162,6 +179,22 @@ export async function generateReport({
           }
         }
       }
+      if (dailyReport.lifelogs) {
+        if (!report.lifelogs) report.lifelogs = [];
+        for (const d of dailyReport.lifelogs) {
+          if (report.lifelogs) {
+            let found = false;
+            for (const m of report.lifelogs) {
+              if (m.what_to_do === d.what_to_do) {
+                m.spent_minutes = (m.spent_minutes || 0) + d.spent_minutes;
+                found = true;
+                break;
+              }
+            }
+            if (!found) report.lifelogs.push(d);
+          }
+        }
+      }
     }
   }
   report.work_hours = Math.floor(report.work_minutes / 6) / 10;
@@ -189,11 +222,17 @@ export async function generateReport({
     }
     report.projects.sort((a, b) => a.work_minutes > b.work_minutes ? -1 : 1);
   }
+  if (report.lifelogs) {
+    for (const log of report.lifelogs) {
+      log.spent_hours = Math.floor(log.spent_minutes / 6) / 10;
+    }
+    report.lifelogs.sort((a, b) => a.spent_minutes > b.spent_minutes ? -1 : 1);
+  }
   return report;
 }
 
 function calculateDuratinMinutes(start: string, end: string): number {
-  if (start === "" || end === "") {
+  if (start === "" || end === undefined || end === "") {
     return 0;
   }
   const startHHMM = start.split(":");
@@ -211,32 +250,35 @@ function calculateDuratinMinutes(start: string, end: string): number {
 }
 
 interface generateDailyReportArgs {
-  item: SavedAttributes<TE>;
+  entry: SavedAttributes<TE>;
+  lifelog: SavedAttributes<L> | undefined;
   offset: number;
   country: string | undefined;
   language: string;
 }
 export function generateDailyReport({
-  item,
+  entry,
+  lifelog,
   offset,
   country,
   language,
 }: generateDailyReportArgs): DailyReport | undefined {
-  if (!item.user_and_date) {
+  if (!entry.user_and_date) {
     return undefined;
   }
-  const id = item.user_and_date;
+  const id = entry.user_and_date;
   const isToday = id && id.endsWith(todayYYYYMMDD(offset));
 
   const workType = i18n(Label.Work, language);
   const breakTimeType = i18n(Label.BreakTime, language);
   const timeOffType = i18n(Label.TimeOff, language);
+  const lifelogType = i18n(Label.Lifelog, language);
   const rawEntries: ReportTimeEntry[] = (
-    (item.work_entries || []).map((e) => {
-      const entry = deserializeTimeEntry(e);
+    (entry.work_entries || []).map((e) => {
+      const entry = deserializeEntry(e);
       if (!entry) {
         throw new Error(
-          `Unexpected entry detected (entry: ${e}, item: ${item}`,
+          `Unexpected entry detected (entry: ${e}, item: ${entry}`,
         );
       }
       if (entry.end === "") {
@@ -251,14 +293,15 @@ export function generateDailyReport({
         type_emoji: Emoji.Work,
         minutes: calculateDuratinMinutes(entry.start, entry.end),
         project_code: entry.project_code,
+        what_to_do: undefined,
       };
     })
   ).concat(
-    (item.break_time_entries || []).map((e) => {
-      const entry = deserializeTimeEntry(e);
+    (entry.break_time_entries || []).map((e) => {
+      const entry = deserializeEntry(e);
       if (!entry) {
         throw new Error(
-          `Unexpected entry detected (entry: ${e}, item: ${item}`,
+          `Unexpected entry detected (entry: ${e}, item: ${entry}`,
         );
       }
       if (entry.end === "") {
@@ -273,14 +316,15 @@ export function generateDailyReport({
         type_emoji: Emoji.BreakTime,
         minutes: calculateDuratinMinutes(entry.start, entry.end),
         project_code: entry.project_code,
+        what_to_do: undefined,
       };
     }),
   ).concat(
-    (item.time_off_entries || []).map((e) => {
-      const entry = deserializeTimeEntry(e);
+    (entry.time_off_entries || []).map((e) => {
+      const entry = deserializeEntry(e);
       if (!entry) {
         throw new Error(
-          `Unexpected entry detected (entry: ${e}, item: ${item}`,
+          `Unexpected entry detected (entry: ${e}, item: ${entry}`,
         );
       }
       if (entry.end === "") {
@@ -295,11 +339,14 @@ export function generateDailyReport({
         type_emoji: Emoji.TimeOff,
         minutes: calculateDuratinMinutes(entry.start, entry.end),
         project_code: entry.project_code,
+        what_to_do: undefined,
       };
     }),
-  ).sort((a, b) => {
-    return timeToNumber(a.start) > timeToNumber(b.start) ? 1 : -1;
-  });
+  );
+  rawEntries.sort((a, b) =>
+    timeToNumber(a.start) > timeToNumber(b.start) ? 1 : -1
+  );
+
   const entries: ReportTimeEntry[] = [];
   let ongoingWorkEnd: string | undefined = undefined;
   let ongoingWork: ReportTimeEntry | undefined = undefined;
@@ -333,6 +380,7 @@ export function generateDailyReport({
               type_emoji: Emoji.Work,
               minutes: calculateDuratinMinutes(start, end),
               project_code: ongoingWork.project_code,
+              what_to_do: undefined,
             };
             entries.push(ongoingWork);
           }
@@ -348,11 +396,47 @@ export function generateDailyReport({
       }
     }
   }
+
+  if (lifelog) {
+    for (const l of lifelog.logs || []) {
+      const entry = deserializeEntry(l);
+      if (!entry) {
+        throw new Error(
+          `Unexpected entry detected (entry: ${l}, item: ${entry}`,
+        );
+      }
+      if (entry.end === "") {
+        // For real-time updates on the main view
+        if (isToday) entry.end = nowHHMM(offset);
+      }
+      entries.push({
+        start: entry.start,
+        end: entry.end,
+        type: EntryType.Lifelog,
+        type_label: lifelogType,
+        type_emoji: Emoji.Lifelog,
+        minutes: calculateDuratinMinutes(entry.start, entry.end),
+        project_code: undefined,
+        what_to_do: entry.what_to_do,
+      });
+    }
+  }
+  entries.sort((a, b) =>
+    timeToNumber(a.start) > timeToNumber(b.start) ? 1 : -1
+  );
+
   const projectMinutes: Record<string, number> = {};
   for (const e of entries) {
     if (e.type === EntryType.Work && e.project_code) {
       const current = projectMinutes[e.project_code] || 0;
       projectMinutes[e.project_code] = current + e.minutes;
+    }
+  }
+  const lifelogMinutes: Record<string, number> = {};
+  for (const e of entries) {
+    if (e.type === EntryType.Lifelog && e.what_to_do) {
+      const current = lifelogMinutes[e.what_to_do] || 0;
+      lifelogMinutes[e.what_to_do] = current + e.minutes;
     }
   }
 
@@ -362,7 +446,7 @@ export function generateDailyReport({
   let breakTimeMinutes = 0;
   let timeOffMinutes = 0;
   for (const e of entries) {
-    if (e.end !== "") {
+    if (e.end !== undefined && e.end !== "") {
       const minutes = calculateDuratinMinutes(e.start, e.end);
       if (e.type === EntryType.Work) {
         workMinutes += minutes;
@@ -373,7 +457,10 @@ export function generateDailyReport({
           }
           if (timeToNumber(e.start) < 500) {
             if (nightShiftWorkMinutes === undefined) nightShiftWorkMinutes = 0;
-            nightShiftWorkMinutes += calculateDuratinMinutes(e.start, "05:00");
+            const now = nowHHMM(offset);
+            let end = timeToNumber(now) < timeToNumber("05:00") ? now : "05:00";
+            if (timeToNumber(e.end) <= timeToNumber(end)) end = e.end;
+            nightShiftWorkMinutes += calculateDuratinMinutes(e.start, end);
           }
         }
       } else if (e.type === EntryType.BreakTime) {
@@ -387,18 +474,34 @@ export function generateDailyReport({
     if (overtimeWorkMinutes === undefined) overtimeWorkMinutes = 0;
     overtimeWorkMinutes += workMinutes - 8 * 60;
   }
-  const yyyymmdd = item.user_and_date.split("-")[1];
+  const yyyymmdd = entry.user_and_date.split("-")[1];
   const date = toDateFormat(offset, yyyymmdd);
 
-  const projects: ProjectWork[] = [];
-  for (const [project_code, work_minutes] of Object.entries(projectMinutes)) {
-    projects.push({
-      project_code,
-      work_minutes,
-      work_hours: Math.floor(work_minutes / 6) / 10,
-    });
+  let projects: ProjectWork[] | undefined = undefined;
+  if (projectMinutes && Object.keys(projectMinutes).length > 0) {
+    projects = [];
+    for (const [project_code, work_minutes] of Object.entries(projectMinutes)) {
+      projects.push({
+        project_code,
+        work_minutes,
+        work_hours: Math.floor(work_minutes / 6) / 10,
+      });
+    }
+    projects.sort((a, b) => a.work_minutes > b.work_minutes ? -1 : 1);
   }
-  projects.sort((a, b) => a.work_minutes > b.work_minutes ? -1 : 1);
+
+  let lifelogs: Lifelog[] | undefined = undefined;
+  if (lifelogMinutes && Object.keys(lifelogMinutes).length > 0) {
+    lifelogs = [];
+    for (const [what_to_do, spent_minutes] of Object.entries(lifelogMinutes)) {
+      lifelogs.push({
+        what_to_do,
+        spent_minutes,
+        spent_hours: Math.floor(spent_minutes / 6) / 10,
+      });
+    }
+    lifelogs.sort((a, b) => a.spent_minutes > b.spent_minutes ? -1 : 1);
+  }
 
   return {
     date,
@@ -418,6 +521,7 @@ export function generateDailyReport({
     time_off_hours: Math.floor(timeOffMinutes / 6) / 10,
     entries,
     projects,
+    lifelogs,
   };
 }
 
@@ -561,6 +665,19 @@ export function toReportResultBlocks(
       );
     }
   }
+  if (report.lifelogs && report.lifelogs.length > 0) {
+    summary.push("");
+    summary.push(
+      "*" + Emoji.Lifelog + " " + i18n(Label.LifelogSummary, language) + "*",
+    );
+    for (const p of report.lifelogs) {
+      summary.push(
+        "*" + p.what_to_do + "*: " +
+          hourDuration(p.spent_hours, language) + " " +
+          minuteDuration(p.spent_minutes, language),
+      );
+    }
+  }
   let warnings: string[] = [];
   if (report && country) {
     const validator = new LaborLawComplianceValidator(country);
@@ -588,9 +705,12 @@ ${summary.join("\n")}
   for (const daily of report.daily_reports) {
     const entries = daily.entries
       .map((e) => {
-        const label = e.type == EntryType.Work && e.project_code
-          ? e.type_label + " [" + e.project_code + "]"
-          : e.type_label;
+        let label = e.type_label;
+        if (e.type == EntryType.Work && e.project_code) {
+          label = e.type_label + " [" + e.project_code + "]";
+        } else if (e.type === EntryType.Lifelog && e.what_to_do) {
+          label = e.what_to_do;
+        }
         return `${e.type_emoji} ${label}: ${e.start} - ${e.end}`;
       })
       .join("\n");

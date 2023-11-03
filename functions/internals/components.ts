@@ -9,6 +9,8 @@ import {
   AUMapper,
   C,
   CMapper,
+  L,
+  LMapper,
   OP,
   OPMapper,
   P,
@@ -22,6 +24,7 @@ import {
 } from "./datastore.ts";
 import { PrivateMetadata } from "./private_metadata.ts";
 import { fetchUserDetails } from "./slack_api.ts";
+import { AppModeCode } from "./constants.ts";
 
 export interface ComponentParams {
   env: Env;
@@ -37,6 +40,7 @@ export interface ComponentParams {
 export interface Components {
   isDebugMode: boolean;
   canAccessAdminFeature: () => Promise<boolean>;
+  isLifelogEnabled: boolean;
   logLevel: "DEBUG" | "INFO";
   slackApi: SlackAPI;
   te: DataMapper<TE>;
@@ -46,6 +50,7 @@ export interface Components {
   p: DataMapper<P>;
   op: DataMapper<OP>;
   au: DataMapper<AU>;
+  l: DataMapper<L>;
   user: string;
   email: string;
   settings: SavedAttributes<US>;
@@ -122,6 +127,7 @@ export async function injectComponents(
   return {
     isDebugMode,
     canAccessAdminFeature,
+    isLifelogEnabled: settings.app_mode === AppModeCode.WorkAndLifelogs,
     logLevel,
     slackApi,
     us,
@@ -137,6 +143,7 @@ export async function injectComponents(
     p: PMapper(client, logLevel),
     op: OPMapper(client, logLevel),
     au,
+    l: LMapper(client, logLevel),
     holidays,
     yyyymmdd: _yyyymmdd,
     offset: timeOffset,

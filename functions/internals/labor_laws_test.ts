@@ -20,6 +20,7 @@ Deno.test("LaborLawComplianceValidator: Japan", () => {
     time_off_minutes: 0,
     entries: [],
     projects: undefined,
+    lifelogs: undefined,
   };
   const language = LanguageCode.Japanese;
 
