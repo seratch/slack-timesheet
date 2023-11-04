@@ -643,15 +643,16 @@ export async function mainViewBlocks({
         );
       }
     }
-  }
-  if (r && r.lifelogs && r.lifelogs.length > 0) {
-    reportItems.push("");
-    for (const log of r.lifelogs) {
-      reportItems.push(
-        "*" + Emoji.Lifelog + " " + log.what_to_do + "*: " +
-          hourDuration(log.spent_hours, language) + " " +
-          minuteDuration(log.spent_minutes, language),
-      );
+  } else {
+    if (r && r.lifelogs && r.lifelogs.length > 0) {
+      reportItems.push("");
+      for (const log of r.lifelogs) {
+        reportItems.push(
+          "*" + Emoji.Lifelog + " " + log.what_to_do + "*: " +
+            hourDuration(log.spent_hours, language) + " " +
+            minuteDuration(log.spent_minutes, language),
+        );
+      }
     }
   }
   const report = reportItems.join("\n");
