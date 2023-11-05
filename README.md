@@ -2,7 +2,11 @@
 
 This is a sample application that illustrates how to build a tool for managing work hours using Slack's automation platform.
 
-<img src="https://user-images.githubusercontent.com/19658/280443239-2d73c4ca-2b11-42be-9cb0-8055089fe0cc.gif" width=500>
+<img src="https://user-images.githubusercontent.com/19658/280527783-8c9daf89-7bf1-465c-959a-42aed2e1ea31.gif" width=500>
+
+If you wish to track your personal activities beyond business hours, this app also offers a method to manage your lifelogs!
+
+<img src="https://user-images.githubusercontent.com/19658/280528523-0b4cdb47-b062-419a-9c32-49fcf977334b.gif" width=500>
 
 ## Setup
 
@@ -87,7 +91,7 @@ $
 
 This Timesheet app intracts with you only within a single modal view. To launch this modal dialog, click on the link trigger, which was generated when you deployed the app, as shown below. Upon initial startup, the app will prompt you to specify your preferred language, country, and app mode. Following this, you'll be fully equipped to monitor your work time via the app!
 
-<img src="https://user-images.githubusercontent.com/19658/280443239-2d73c4ca-2b11-42be-9cb0-8055089fe0cc.gif" width=500>
+<img src="https://user-images.githubusercontent.com/19658/280527783-8c9daf89-7bf1-465c-959a-42aed2e1ea31.gif" width=500>
 
 Typically, you would click only the "Start/Finish Work" and "Start/Finish Break Time" buttons. There's no need to click anything else as long as you're keeping track of work and break times during your business hours. Sometimes, you may forget to press these buttons. In such cases, you can edit your entries as needed from the top page. Moreover, you can also input days off you have taken. This data will allow you to effortlessly verify if you are fulfilling the necessary work hours with consideration of day offs.
 
@@ -95,7 +99,7 @@ Typically, you would click only the "Start/Finish Work" and "Start/Finish Break 
 
 To check/edit past inputs, you can use the Calendar view from the menu.
 
-<img src="https://user-images.githubusercontent.com/19658/280443487-b43a8adb-6c20-4f8c-b505-37bf516dede5.gif" width=500>
+<img src="https://user-images.githubusercontent.com/19658/280527960-a8bfd5f8-1eba-4bf9-b668-07043796f3ab.gif" width=500>
 
 This feature can be particularly beneficial when setting time off information in advance. It allows you to navigate to a future date when you're taking time off. When you want to get a comprehensive view of the current month, the Monthly Report feature, which I will detail next, should prove to be even more convenient.
 
@@ -107,13 +111,13 @@ The Monthly Report feature can be helpful not just at the end of each month, but
 
 If you click the "Send this in DM" button located in the upper right corner, a message containing a replicated report from the app will be delivered to you. Conveniently, the message also provides the raw JSON data as an attachment. Often, employees are required to input work data into a unfied corporate system. In such instances, utilizing the JSON data (e.g., writing a script, converting the JSON data structure to a required format) could help you achieve smooth data integration.
 
-<img width="400" src="https://user-images.githubusercontent.com/19658/279314058-83278891-c565-4c92-b2a4-d2b2bbf41e68.png">
+<img width="500" src="https://user-images.githubusercontent.com/19658/280528049-fa621ef5-925b-41af-b4b3-41a60dc37e36.gif">
 
 ### Projects
 
 The "Project Code" management is an optional and advanced feature. This feature is typically used for managing detailed, segmental work hours for a particular purpose, project, or team. You can utilize project codes for tracking these specifics. Once you register a minimum of one active project code, this app will prompt all end-users to select a project code whenever they start their work time.
 
-<img src="https://user-images.githubusercontent.com/19658/280443858-2a578722-2bef-444a-8f1d-9b669a36fc17.gif" width=500>
+<img src="https://user-images.githubusercontent.com/19658/280528213-b50dfee7-0363-4b48-9c98-d19317c22628.gif" width=500>
 
 By default, setting a project code is optional. However, if your organization consistently requires all employees to set a code, you can modify the source code, `functions/internals/views.ts`, by removing the `"optional": true` flag in the relevant sections.
 
@@ -121,7 +125,7 @@ By default, setting a project code is optional. However, if your organization co
 
 As an admin, you have the ability to manage policies that apply across your organization. These policies can become crucial when evaluating this application's utility for real business operations. For instance, in accordance with Japanese labor law, it is considered a best practice to limit manually created time records. In light of this strict policy, it is mandatory for employees to use a time card or an equivalent. One of the built-in organization policies allows this app to function as a virtual time card, thereby adhering to such regulations.
 
-<img src="https://user-images.githubusercontent.com/19658/280443959-c056fe9c-5c4f-4d78-ab54-479ef08533aa.gif" width=500>
+<img src="https://user-images.githubusercontent.com/19658/280528320-aab8b32a-07c9-4f22-b367-e063827614f6.gif" width=500>
 
 
 ### Admin Privileges
