@@ -1478,7 +1478,7 @@ export async function newEditEntryView({
       "initial_time": entry.start,
     },
   });
-  if (entry.end !== "") {
+  if (entry.end !== undefined && entry.end !== "") {
     view.blocks.push({
       "type": "input",
       "block_id": BlockId.End,
