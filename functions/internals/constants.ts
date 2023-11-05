@@ -127,7 +127,7 @@ export class Label {
   static TimeOff = "Time off";
   static Holiday = "Holiday";
   static Lifelog = "Lifelog";
-  static NumOfWorkingDays = "Num of Working Days";
+  static NumOfWorkingDays = "# of Working Days";
   static BackToToday = "Today";
   static UserSettings = "User Settings";
   static Calendar = "Calendar";

@@ -129,10 +129,14 @@ export async function generateReport({
     projects: undefined,
     lifelogs: undefined,
   };
-  for (const entry of entries) {
-    const lifelog = lifelogs.find((l) =>
-      l.user_and_date === entry.user_and_date
-    );
+  for (let i = 1; i <= 31; i++) {
+    const dd = ("00" + i).slice(-2);
+    const elems = month.split("/");
+    const yyyy = elems[0];
+    const mm = ("00" + elems[1]).slice(-2);
+    const yyyymmdd = `${yyyy}${mm}${dd}`;
+    const entry = entries.find((e) => e.user_and_date?.endsWith(yyyymmdd));
+    const lifelog = lifelogs.find((l) => l.user_and_date?.endsWith(yyyymmdd));
     const dailyReport = generateDailyReport({
       entry,
       lifelog,
@@ -140,6 +144,7 @@ export async function generateReport({
       country,
       language,
     });
+
     if (dailyReport) {
       if (dailyReport.work_minutes > 0) {
         report.num_of_working_days += 1;
@@ -182,17 +187,15 @@ export async function generateReport({
       if (dailyReport.lifelogs) {
         if (!report.lifelogs) report.lifelogs = [];
         for (const d of dailyReport.lifelogs) {
-          if (report.lifelogs) {
-            let found = false;
-            for (const m of report.lifelogs) {
-              if (m.what_to_do === d.what_to_do) {
-                m.spent_minutes = (m.spent_minutes || 0) + d.spent_minutes;
-                found = true;
-                break;
-              }
+          let found = false;
+          for (const m of report.lifelogs) {
+            if (m.what_to_do === d.what_to_do) {
+              m.spent_minutes = (m.spent_minutes || 0) + d.spent_minutes;
+              found = true;
+              break;
             }
-            if (!found) report.lifelogs.push(d);
           }
+          if (!found) report.lifelogs.push(d);
         }
       }
     }
@@ -250,7 +253,7 @@ function calculateDuratinMinutes(start: string, end: string): number {
 }
 
 interface generateDailyReportArgs {
-  entry: SavedAttributes<TE>;
+  entry: SavedAttributes<TE> | undefined;
   lifelog: SavedAttributes<L> | undefined;
   offset: number;
   country: string | undefined;
@@ -263,10 +266,13 @@ export function generateDailyReport({
   country,
   language,
 }: generateDailyReportArgs): DailyReport | undefined {
-  if (!entry.user_and_date && !lifelog?.user_and_date) {
+  if (!entry && !lifelog) {
     return undefined;
   }
-  const id = entry.user_and_date;
+  if (entry && !entry.user_and_date && !lifelog?.user_and_date) {
+    return undefined;
+  }
+  const id: string = entry?.user_and_date || lifelog!.user_and_date!;
   const isToday = id && id.endsWith(todayYYYYMMDD(offset));
 
   const workType = i18n(Label.Work, language);
@@ -274,7 +280,7 @@ export function generateDailyReport({
   const timeOffType = i18n(Label.TimeOff, language);
   const lifelogType = i18n(Label.Lifelog, language);
   const rawEntries: ReportTimeEntry[] = (
-    (entry.work_entries || []).map((e) => {
+    ((entry || {}).work_entries || []).map((e) => {
       const entry = deserializeEntry(e);
       if (!entry) {
         throw new Error(
@@ -297,7 +303,7 @@ export function generateDailyReport({
       };
     })
   ).concat(
-    (entry.break_time_entries || []).map((e) => {
+    ((entry || {}).break_time_entries || []).map((e) => {
       const entry = deserializeEntry(e);
       if (!entry) {
         throw new Error(
@@ -320,7 +326,7 @@ export function generateDailyReport({
       };
     }),
   ).concat(
-    (entry.time_off_entries || []).map((e) => {
+    ((entry || {}).time_off_entries || []).map((e) => {
       const entry = deserializeEntry(e);
       if (!entry) {
         throw new Error(
@@ -474,8 +480,7 @@ export function generateDailyReport({
     if (overtimeWorkMinutes === undefined) overtimeWorkMinutes = 0;
     overtimeWorkMinutes += workMinutes - 8 * 60;
   }
-  const yyyymmdd =
-    (entry.user_and_date || lifelog!.user_and_date!).split("-")[1];
+  const yyyymmdd = id.split("-")[1];
   const date = toDateFormat(offset, yyyymmdd);
 
   let projects: ProjectWork[] | undefined = undefined;
