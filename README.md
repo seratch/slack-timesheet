@@ -107,11 +107,10 @@ This feature can be particularly beneficial when setting time off information in
 
 The Monthly Report feature can be helpful not just at the end of each month, but at any given time. By accessing this page, you're able to look back and reflect upon how the current month has been progressing so far.
 
-<img src="https://user-images.githubusercontent.com/19658/280443664-db76de99-4e01-457d-b284-4b456cbbe3e6.gif" width=500>
+<img width="500" src="https://user-images.githubusercontent.com/19658/280528049-fa621ef5-925b-41af-b4b3-41a60dc37e36.gif">
+
 
 If you click the "Send this in DM" button located in the upper right corner, a message containing a replicated report from the app will be delivered to you. Conveniently, the message also provides the raw JSON data as an attachment. Often, employees are required to input work data into a unfied corporate system. In such instances, utilizing the JSON data (e.g., writing a script, converting the JSON data structure to a required format) could help you achieve smooth data integration.
-
-<img width="500" src="https://user-images.githubusercontent.com/19658/280528049-fa621ef5-925b-41af-b4b3-41a60dc37e36.gif">
 
 ### Projects
 
