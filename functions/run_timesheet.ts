@@ -47,6 +47,9 @@ import {
   toUserSettingsView,
 } from "./internals/views.ts";
 import {
+  AVMapper,
+  cleanUpOldActiveViews,
+  deleteClosingOneFromActiveViews,
   fetchAllActiveProjects,
   fetchAllCountries,
   fetchAllMemberMonthTimeEntries,
@@ -62,6 +65,7 @@ import {
   isLifelogRecord,
   L,
   P,
+  saveLastActiveView,
   saveLifelog,
   saveProject,
   saveTimeEntry,
@@ -95,6 +99,7 @@ import {
 } from "./internals/organization_policies.ts";
 import { i18n } from "./internals/i18n.ts";
 import { fetchUserDetails } from "./internals/slack_api.ts";
+import { determineLogLevel } from "./internals/debug_mode.ts";
 
 export const def = DefineFunction({
   callback_id: "run_timesheet",
@@ -123,7 +128,12 @@ export default SlackFunction(
       },
     } = args;
     const components = await injectComponents({ ...args });
-    const { language, settings, isDebugMode, isLifelogEnabled } = components;
+    const { language, settings, isDebugMode, isLifelogEnabled, av } =
+      components;
+
+    // Await this later to avoid overhead
+    const cleanUpTask = cleanUpOldActiveViews({ av, user_id });
+
     let view: ModalView = newView(language);
     if (!settings.user) {
       if (isDebugMode) {
@@ -161,18 +171,62 @@ export default SlackFunction(
       );
     }
     try {
-      await components.slackApi.views.open(
+      const viewOpen = await components.slackApi.views.open(
         { trigger_id: interactivity_pointer, view },
       );
+      await saveLastActiveView({
+        view_id: viewOpen.view!.id!,
+        user_id: components.user,
+        callback_id: view.callback_id!,
+        ...components,
+      });
     } catch (e) {
       const error =
         `Failed to open a modal to <@${user_id}> (error: ${e.stack})`;
       console.log(error);
       return { error };
     }
+    try {
+      // Await here to avoid bringing extra overhead for the runtime performance
+      await cleanUpTask;
+    } catch (e) {
+      console.log(`Failed to clean up old view data in datastore: ${e}`);
+    }
+
     return { completed: false };
   },
 )
+  // --------------------------------------------
+  // view_closed handlers
+  // --------------------------------------------
+  .addViewClosedHandler([
+    CallbackId.AddEntry,
+    CallbackId.AddLifelog,
+    CallbackId.AddProject,
+    CallbackId.AdminMenu,
+    CallbackId.AdminReportDownload,
+    CallbackId.Calendar,
+    CallbackId.EditEntry,
+    CallbackId.EditProject,
+    CallbackId.MainView,
+    CallbackId.ManualEntry,
+    CallbackId.OrganizationPolicies,
+    CallbackId.ProjectMainView,
+    CallbackId.ReportResult,
+    CallbackId.ReportStart,
+    CallbackId.StartLifelog,
+    CallbackId.StartWorkWithProject,
+    CallbackId.UserSettings,
+  ], async (args) => {
+    const { view, client, env } = args;
+    try {
+      const logLevel = determineLogLevel(env);
+      const av = AVMapper(client, logLevel);
+      await av.deleteById({ id: view.id });
+    } catch (e) {
+      console.log(`Failed to delete view data in datastore due to ${e}`);
+    }
+  })
   // --------------------------------------------
   // Manual Entry
   // --------------------------------------------
@@ -198,7 +252,13 @@ export default SlackFunction(
           view = await newAddLifelogView({ ...components });
         }
         const trigger_id = body.interactivity.interactivity_pointer;
-        await slackApi.views.push({ trigger_id, view });
+        const result = await slackApi.views.push({ trigger_id, view });
+        await saveLastActiveView({
+          callback_id: view.callback_id!,
+          view_id: result.view!.id!,
+          user_id: user,
+          ...components,
+        });
         return {};
       } catch (e) {
         const error =
@@ -222,23 +282,27 @@ export default SlackFunction(
           return {};
         }
         const selected = action.selected_option.value;
+        const view_id = body.view.id;
+        let view: ModalView | undefined = undefined;
         if (selected === EntryType.Lifelog) {
-          await slackApi.views.update({
-            view_id: body.view.id,
-            view: await newAddLifelogView({ ...components }),
-          });
+          view = await newAddLifelogView({ ...components });
+          await slackApi.views.update({ view_id, view });
         } else {
           let projects: SavedAttributes<P>[] = [];
           if (selected === EntryType.Work) {
             projects = await fetchAllActiveProjects({ ...components });
           }
-          await slackApi.views.update({
-            view_id: body.view.id,
-            view: await newAddEntryView(
-              { projects, entryType: selected, ...components },
-            ),
-          });
+          view = await newAddEntryView(
+            { projects, entryType: selected, ...components },
+          );
+          await slackApi.views.update({ view_id, view });
         }
+        await saveLastActiveView({
+          callback_id: view.callback_id!,
+          view_id,
+          user_id: user,
+          ...components,
+        });
         return {};
       } catch (e) {
         const error =
@@ -308,13 +372,24 @@ export default SlackFunction(
         const saved = await saveTimeEntry({ attributes, ...components });
 
         if (saved) {
-          await syncMainView({
-            viewId: view.root_view_id,
+          const viewId = view.root_view_id;
+          const result = await syncMainView({
+            viewId,
             manualEntryPermitted,
             entry: saved,
             lifelog: isLifelogEnabled
               ? await fetchLifelog({ ...components })
               : undefined,
+            ...components,
+          });
+          await saveLastActiveView({
+            callback_id: result.view!.callback_id!,
+            view_id: viewId,
+            user_id: user,
+            ...components,
+          });
+          await deleteClosingOneFromActiveViews({
+            view_id: view.id,
             ...components,
           });
         }
@@ -363,8 +438,9 @@ export default SlackFunction(
           const manualEntryPermitted = await isManualEntryPermitted({
             ...components,
           });
-          await syncMainView({
-            viewId: view.root_view_id,
+          const viewId = view.root_view_id;
+          const result = await syncMainView({
+            viewId,
             manualEntryPermitted,
             entry: await fetchTimeEntry({
               ...components,
@@ -373,6 +449,16 @@ export default SlackFunction(
             lifelog: saved,
             ...components,
             yyyymmdd, // override
+          });
+          await saveLastActiveView({
+            callback_id: result.view!.callback_id!,
+            view_id: viewId,
+            user_id: user,
+            ...components,
+          });
+          await deleteClosingOneFromActiveViews({
+            view_id: view.id,
+            ...components,
           });
         }
         return {};
@@ -393,6 +479,7 @@ export default SlackFunction(
       const { body, action } = args;
       const components = await injectComponents({ ...args });
       const { user, slackApi, offset } = components;
+      const viewId = body.view.id;
       try {
         const value: string = action.selected_option.value;
         let entries: string[] = [];
@@ -427,11 +514,17 @@ export default SlackFunction(
             if (idxToDel > -1) entries.splice(idxToDel, 1);
             entry = await saveTimeEntry({ attributes, ...components });
           }
-          await syncMainView({
-            viewId: body.view.id,
+          const result = await syncMainView({
+            viewId,
             entry,
             lifelog,
             manualEntryPermitted,
+            ...components,
+          });
+          await saveLastActiveView({
+            callback_id: result.view!.callback_id!,
+            view_id: viewId,
+            user_id: user,
             ...components,
           });
         } else if (value.startsWith("finish___")) {
@@ -474,11 +567,17 @@ export default SlackFunction(
               }
             }
           }
-          await syncMainView({
+          const result = await syncMainView({
             viewId: body.view.id,
             entry,
             lifelog,
             manualEntryPermitted,
+            ...components,
+          });
+          await saveLastActiveView({
+            callback_id: result.view!.callback_id!,
+            view_id: viewId,
+            user_id: user,
             ...components,
           });
         } else {
@@ -496,11 +595,17 @@ export default SlackFunction(
               projectCodeEnabled = await hasActiveProjects({ ...components });
             }
           }
-          await slackApi.views.push({
+          const result = await slackApi.views.push({
             trigger_id: body.interactivity.interactivity_pointer,
             view: await newEditEntryView(
               { type: entry.type, entry, projectCodeEnabled, ...components },
             ),
+          });
+          await saveLastActiveView({
+            callback_id: result.view!.callback_id!,
+            view_id: viewId,
+            user_id: user,
+            ...components,
           });
         }
         return {};
@@ -592,11 +697,22 @@ export default SlackFunction(
           timeEntry = await saveTimeEntry({ attributes, ...components });
           lifelog = await fetchLifelog({ ...components });
         }
-        await syncMainView({
-          viewId: view.root_view_id,
+        const viewId = view.root_view_id;
+        const result = await syncMainView({
+          viewId,
           manualEntryPermitted,
           entry: timeEntry,
           lifelog: lifelog,
+          ...components,
+        });
+        await saveLastActiveView({
+          callback_id: result.view!.callback_id!,
+          view_id: viewId,
+          user_id: user,
+          ...components,
+        });
+        await deleteClosingOneFromActiveViews({
+          view_id: view.id,
           ...components,
         });
         return {};
@@ -626,12 +742,18 @@ export default SlackFunction(
       } = components;
       try {
         if (await hasActiveProjects({ ...components })) {
-          await slackApi.views.push({
+          const result = await slackApi.views.push({
             trigger_id: body.interactivity.interactivity_pointer,
             view: toStartWorkWithProjectCodeView({
               view: newView(language),
               ...components,
             }),
+          });
+          await saveLastActiveView({
+            callback_id: result.view!.callback_id!,
+            view_id: result.view!.id!,
+            user_id: user,
+            ...components,
           });
           return;
         }
@@ -649,8 +771,9 @@ export default SlackFunction(
           }),
         );
         const saved = await saveTimeEntry({ attributes, ...components });
-        await syncMainView({
-          viewId: body.view.id,
+        const viewId = body.view.id;
+        const result = await syncMainView({
+          viewId,
           entry: saved,
           lifelog: isLifelogEnabled
             ? await fetchLifelog({ ...components })
@@ -658,6 +781,12 @@ export default SlackFunction(
           manualEntryPermitted: await isManualEntryPermitted({
             ...components,
           }),
+          ...components,
+        });
+        await saveLastActiveView({
+          callback_id: result.view!.callback_id!,
+          view_id: viewId,
+          user_id: user,
           ...components,
         });
         return {};
@@ -690,7 +819,8 @@ export default SlackFunction(
         );
         attributes.work_entries!.push(newEntry);
         const saved = await saveTimeEntry({ attributes, ...components });
-        await syncMainView({
+        const viewId = body.view.previous_view_id;
+        const result = await syncMainView({
           viewId: body.view.previous_view_id,
           entry: saved,
           lifelog: isLifelogEnabled
@@ -699,6 +829,16 @@ export default SlackFunction(
           manualEntryPermitted: await isManualEntryPermitted({
             ...components,
           }),
+          ...components,
+        });
+        await saveLastActiveView({
+          callback_id: result.view!.callback_id!,
+          view_id: viewId,
+          user_id: user,
+          ...components,
+        });
+        await deleteClosingOneFromActiveViews({
+          view_id: view.id,
           ...components,
         });
         return {};
@@ -729,8 +869,9 @@ export default SlackFunction(
               end, // override
             });
             const saved = await saveTimeEntry({ attributes, ...components });
-            await syncMainView({
-              viewId: body.view.id,
+            const viewId = body.view.id;
+            const result = await syncMainView({
+              viewId,
               entry: saved,
               lifelog: isLifelogEnabled
                 ? await fetchLifelog({ ...components })
@@ -738,6 +879,12 @@ export default SlackFunction(
               manualEntryPermitted: await isManualEntryPermitted({
                 ...components,
               }),
+              ...components,
+            });
+            await saveLastActiveView({
+              callback_id: result.view!.callback_id!,
+              view_id: viewId,
+              user_id: user,
               ...components,
             });
           }
@@ -767,8 +914,9 @@ export default SlackFunction(
           { start: nowHHMM(offset), end: "", project_code: undefined },
         ));
         const saved = await saveTimeEntry({ attributes, ...components });
-        await syncMainView({
-          viewId: body.view.root_view_id,
+        const viewId = body.view.root_view_id;
+        const result = await syncMainView({
+          viewId,
           entry: saved,
           lifelog: isLifelogEnabled
             ? await fetchLifelog({ ...components })
@@ -776,6 +924,12 @@ export default SlackFunction(
           manualEntryPermitted: await isManualEntryPermitted({
             ...components,
           }),
+          ...components,
+        });
+        await saveLastActiveView({
+          callback_id: result.view!.callback_id!,
+          view_id: viewId,
+          user_id: user,
           ...components,
         });
         return {};
@@ -807,8 +961,9 @@ export default SlackFunction(
                 end, // override
               });
               const saved = await saveTimeEntry({ attributes, ...components });
-              await syncMainView({
-                viewId: body.view.id,
+              const viewId = body.view.id;
+              const result = await syncMainView({
+                viewId,
                 entry: saved,
                 lifelog: isLifelogEnabled
                   ? await fetchLifelog({ ...components })
@@ -816,6 +971,12 @@ export default SlackFunction(
                 manualEntryPermitted: await isManualEntryPermitted({
                   ...components,
                 }),
+                ...components,
+              });
+              await saveLastActiveView({
+                callback_id: result.view!.callback_id!,
+                view_id: viewId,
+                user_id: user,
                 ...components,
               });
             }
@@ -836,9 +997,15 @@ export default SlackFunction(
       const components = await injectComponents({ ...args });
       const { user, slackApi, language } = components;
       try {
-        await slackApi.views.push({
+        const result = await slackApi.views.push({
           trigger_id: body.interactivity.interactivity_pointer,
           view: toStartLifelogView({ view: newView(language), ...components }),
+        });
+        await saveLastActiveView({
+          callback_id: result.view!.callback_id!,
+          view_id: result.view!.id!,
+          user_id: user,
+          ...components,
         });
         return {};
       } catch (e) {
@@ -871,13 +1038,24 @@ export default SlackFunction(
         const log: Lifelog = { start: nowHHMM(offset), what_to_do };
         attributes.logs.push(serializeEntry(log));
         const saved = await saveLifelog({ attributes, ...components });
-        await syncMainView({
-          viewId: body.view.root_view_id,
+        const viewId = body.view.root_view_id;
+        const result = await syncMainView({
+          viewId,
           entry: await fetchTimeEntry({ ...components }),
           lifelog: saved,
           manualEntryPermitted: await isManualEntryPermitted({
             ...components,
           }),
+          ...components,
+        });
+        await saveLastActiveView({
+          callback_id: result.view!.callback_id!,
+          view_id: viewId,
+          user_id: user,
+          ...components,
+        });
+        await deleteClosingOneFromActiveViews({
+          view_id: view.id,
           ...components,
         });
         return {};
@@ -908,13 +1086,20 @@ export default SlackFunction(
               end, // override
             });
             lifelog = await saveLifelog({ attributes, ...components });
-            await syncMainView({
-              viewId: body.view.id,
+            const viewId = body.view.id;
+            const result = await syncMainView({
+              viewId,
               entry: await fetchTimeEntry({ ...components }),
               lifelog,
               manualEntryPermitted: await isManualEntryPermitted({
                 ...components,
               }),
+              ...components,
+            });
+            await saveLastActiveView({
+              callback_id: result.view!.callback_id!,
+              view_id: viewId,
+              user_id: user,
               ...components,
             });
           }
@@ -960,8 +1145,9 @@ export default SlackFunction(
       const components = await injectComponents({ ...args });
       const { user, isLifelogEnabled } = components;
       try {
-        await syncMainView({
-          viewId: body.view.id,
+        const viewId = body.view.id;
+        const result = await syncMainView({
+          viewId,
           entry: await fetchTimeEntry({ ...components }),
           lifelog: isLifelogEnabled
             ? await fetchLifelog({ ...components })
@@ -969,6 +1155,12 @@ export default SlackFunction(
           manualEntryPermitted: await isManualEntryPermitted({
             ...components,
           }),
+          ...components,
+        });
+        await saveLastActiveView({
+          callback_id: result.view!.callback_id!,
+          view_id: viewId,
+          user_id: user,
           ...components,
         });
         return {};
@@ -1000,7 +1192,7 @@ export default SlackFunction(
       try {
         const selectedMenu: string = action.selected_option.value;
         if (selectedMenu === MenuItem.UserSettings) {
-          await slackApi.views.push({
+          const result = await slackApi.views.push({
             trigger_id: interactivity.interactivity_pointer,
             view: toUserSettingsView({
               view: newView(language),
@@ -1009,10 +1201,17 @@ export default SlackFunction(
               ...components,
             }),
           });
+          await saveLastActiveView({
+            callback_id: result.view!.callback_id!,
+            view_id: result.view!.id!,
+            user_id: user,
+            ...components,
+          });
         } else if (selectedMenu === MenuItem.BackToToday) {
           const yyyymmdd = todayYYYYMMDD(offset);
-          await slackApi.views.update({
-            view_id: view.id,
+          const view_id = view.id;
+          const result = await slackApi.views.update({
+            view_id,
             view: await toMainView({
               view: newView(language),
               entry: await fetchTimeEntry({
@@ -1032,21 +1231,45 @@ export default SlackFunction(
               yyyymmdd, // overrite
             }),
           });
+          await saveLastActiveView({
+            callback_id: result.view!.callback_id!,
+            view_id,
+            user_id: user,
+            ...components,
+          });
         } else if (selectedMenu === MenuItem.Calendar) {
-          await slackApi.views.push({
+          const result = await slackApi.views.push({
             view: toCalendarView(newView(language), offset, language),
             trigger_id,
           });
+          await saveLastActiveView({
+            callback_id: result.view!.callback_id!,
+            view_id: result.view!.id!,
+            user_id: user,
+            ...components,
+          });
         } else if (selectedMenu === MenuItem.MonthlyReport) {
-          await slackApi.views.push({
+          const result = await slackApi.views.push({
             view: toReportStartView({ view: newView(language), ...components }),
             trigger_id,
           });
+          await saveLastActiveView({
+            callback_id: result.view!.callback_id!,
+            view_id: result.view!.id!,
+            user_id: user,
+            ...components,
+          });
         } else if (selectedMenu === MenuItem.AdminMenu) {
           if (!await canAccessAdminFeature()) return {};
-          await slackApi.views.push({
+          const result = await slackApi.views.push({
             view: toAdminMenuView({ view: newView(language), ...components }),
             trigger_id,
+          });
+          await saveLastActiveView({
+            callback_id: result.view!.callback_id!,
+            view_id: result.view!.id!,
+            user_id: user,
+            ...components,
           });
         }
         return {};
@@ -1068,7 +1291,7 @@ export default SlackFunction(
       const language = stateValue(view, BlockId.Language)!
         .selected_option!.value;
       const components = await injectComponents({ ...args });
-      const { user, isLifelogEnabled } = components;
+      const { user, isLifelogEnabled, offset } = components;
       try {
         let country_id = "";
         let app_mode = AppModeCode.Work;
@@ -1081,6 +1304,7 @@ export default SlackFunction(
           language,
           country_id,
           app_mode,
+          offset,
         };
         const saved = await saveUserSettings({ attributes, ...components });
         const manualEntryPermitted = await isManualEntryPermitted({
@@ -1091,7 +1315,7 @@ export default SlackFunction(
           ? await fetchLifelog({ ...components })
           : undefined;
         if (view.root_view_id !== view.id) {
-          await syncMainView({
+          const result = await syncMainView({
             viewId: view.root_view_id,
             entry,
             lifelog,
@@ -1100,9 +1324,25 @@ export default SlackFunction(
             language: saved.language,
             isLifelogEnabled: app_mode === AppModeCode.WorkAndLifelogs,
           });
+          await saveLastActiveView({
+            callback_id: result.view!.callback_id!,
+            view_id: result.view!.id!,
+            user_id: user,
+            ...components,
+          });
+          await deleteClosingOneFromActiveViews({
+            view_id: view.id,
+            ...components,
+          });
           return {};
         } else {
           // When an end-user submits the initial UserSettings
+          await saveLastActiveView({
+            callback_id: view.callback_id,
+            view_id: view.id,
+            user_id: user,
+            ...components,
+          });
           return {
             response_action: "update",
             view: await toMainView({
@@ -1135,7 +1375,7 @@ export default SlackFunction(
       const components = await injectComponents({ ...args });
       const { user, language, slackApi, isLifelogEnabled } = components;
       try {
-        await slackApi.views.update({
+        const result = await slackApi.views.update({
           view_id: body.view.root_view_id,
           view: await toMainView({
             view: newView(language),
@@ -1155,6 +1395,16 @@ export default SlackFunction(
             ...components,
             yyyymmdd, // overrite with the sent one
           }),
+        });
+        await saveLastActiveView({
+          callback_id: result.view!.callback_id!,
+          view_id: result.view!.id!,
+          user_id: user,
+          ...components,
+        });
+        await deleteClosingOneFromActiveViews({
+          view_id: view.id,
+          ...components,
         });
         return {};
       } catch (e) {
@@ -1187,6 +1437,12 @@ export default SlackFunction(
         const lifelogs = includeLifelogs
           ? await fetchMonthLifelogs({ yyyymm, ...components })
           : [];
+        await saveLastActiveView({
+          callback_id: view.callback_id,
+          view_id: view.id,
+          user_id: user,
+          ...components,
+        });
         return {
           response_action: "update",
           view: await toReportResultView({
@@ -1245,15 +1501,21 @@ export default SlackFunction(
         if (!await canAccessAdminFeature()) return {};
         const selectedMenu: string = action.selected_option.value;
         if (selectedMenu === AdminMenuItem.AdminReportDownload) {
-          await slackApi.views.update({
+          const result = await slackApi.views.update({
             view_id: view.id,
             view: toAdminReportDownloadView({
               view: newView(language),
               ...components,
             }),
           });
+          await saveLastActiveView({
+            callback_id: result.view!.callback_id!,
+            view_id: result.view!.id!,
+            user_id: user,
+            ...components,
+          });
         } else if (selectedMenu === AdminMenuItem.ProjectSettings) {
-          await slackApi.views.update({
+          const result = await slackApi.views.update({
             view_id: view.id,
             view: toProjectMainView({
               view: newView(language),
@@ -1261,14 +1523,26 @@ export default SlackFunction(
               ...components,
             }),
           });
+          await saveLastActiveView({
+            callback_id: result.view!.callback_id!,
+            view_id: result.view!.id!,
+            user_id: user,
+            ...components,
+          });
         } else if (selectedMenu === AdminMenuItem.OrganizationPolicies) {
-          await slackApi.views.update({
+          const result = await slackApi.views.update({
             view_id: view.id,
             view: toOrganizationPoliciesView({
               view: newView(language),
               policies: (await op.findAll()).items,
               ...components,
             }),
+          });
+          await saveLastActiveView({
+            callback_id: result.view!.callback_id!,
+            view_id: result.view!.id!,
+            user_id: user,
+            ...components,
           });
         }
         return {};
@@ -1371,9 +1645,15 @@ export default SlackFunction(
       const { user, slackApi, canAccessAdminFeature } = components;
       try {
         if (!await canAccessAdminFeature()) return {};
-        await slackApi.views.push({
+        const result = await slackApi.views.push({
           trigger_id: body.interactivity.interactivity_pointer,
           view: newAddProjectView({ ...components }),
+        });
+        await saveLastActiveView({
+          callback_id: result.view!.callback_id!,
+          view_id: result.view!.id!,
+          user_id: user,
+          ...components,
         });
         return {};
       } catch (e) {
@@ -1417,9 +1697,19 @@ export default SlackFunction(
         // To deal with the eventual consistency of datastore
         if (!projects.find((p) => p.code === saved.code)) projects.push(saved);
         projects.sort((a, b) => a.code > b.code ? 1 : -1);
-        await syncProjectMainView(
+        const result = await syncProjectMainView(
           { viewId: view.previous_view_id, projects, ...components },
         );
+        await saveLastActiveView({
+          callback_id: result.view!.callback_id!,
+          view_id: result.view!.id!,
+          user_id: user,
+          ...components,
+        });
+        await deleteClosingOneFromActiveViews({
+          view_id: view.id,
+          ...components,
+        });
         return {};
       } catch (e) {
         const error =
@@ -1439,9 +1729,15 @@ export default SlackFunction(
         const code: string = action.value;
         const project = await fetchProject({ code, ...components });
         if (!project.code) return {};
-        await slackApi.views.push({
+        const result = await slackApi.views.push({
           trigger_id: body.interactivity.interactivity_pointer,
           view: newEditProjectView({ code, project, ...components }),
+        });
+        await saveLastActiveView({
+          callback_id: result.view!.callback_id!,
+          view_id: result.view!.id!,
+          user_id: user,
+          ...components,
         });
         return {};
       } catch (e) {
@@ -1492,9 +1788,19 @@ export default SlackFunction(
         }
         projects.sort((a, b) => a.code > b.code ? 1 : -1);
 
-        await syncProjectMainView(
+        const result = await syncProjectMainView(
           { viewId: view.previous_view_id, projects, ...components },
         );
+        await saveLastActiveView({
+          callback_id: result.view!.callback_id!,
+          view_id: result.view!.id!,
+          user_id: user,
+          ...components,
+        });
+        await deleteClosingOneFromActiveViews({
+          view_id: view.id,
+          ...components,
+        });
         return {};
       } catch (e) {
         const error =
@@ -1552,7 +1858,7 @@ export default SlackFunction(
           return {};
         }
         await op.save({ attributes: { key, value } });
-        await slackApi.views.update({
+        const result = await slackApi.views.update({
           view_id: body.view.id,
           view: toOrganizationPoliciesView({
             view: newView(language),
@@ -1560,6 +1866,14 @@ export default SlackFunction(
             ...components,
           }),
         });
+        // This user is still on this view
+        await saveLastActiveView({
+          callback_id: result.view!.callback_id!,
+          view_id: result.view!.id!,
+          user_id: user,
+          ...components,
+        });
+
         const lifelog = isLifelogEnabled
           ? await fetchLifelog({ ...components })
           : undefined;

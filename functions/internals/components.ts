@@ -7,6 +7,8 @@ import { todayYYYYMMDD } from "./datetime.ts";
 import {
   AU,
   AUMapper,
+  AV,
+  AVMapper,
   C,
   CMapper,
   L,
@@ -25,6 +27,7 @@ import {
 import { PrivateMetadata } from "./private_metadata.ts";
 import { fetchUserDetails } from "./slack_api.ts";
 import { AppModeCode } from "./constants.ts";
+import { determineIsDebugMode, determineLogLevel } from "./debug_mode.ts";
 
 export interface ComponentParams {
   env: Env;
@@ -51,6 +54,7 @@ export interface Components {
   op: DataMapper<OP>;
   au: DataMapper<AU>;
   l: DataMapper<L>;
+  av: DataMapper<AV>;
   user: string;
   email: string;
   settings: SavedAttributes<US>;
@@ -65,14 +69,8 @@ export interface Components {
 export async function injectComponents(
   { env, token, client, inputs: { user_id }, body }: ComponentParams,
 ): Promise<Components> {
-  const isDebugMode: boolean = env.DEBUG_MODE !== undefined && (
-    env.DEBUG_MODE === "1" ||
-    env.DEBUG_MODE === "T" ||
-    env.DEBUG_MODE === "TRUE" ||
-    env.DEBUG_MODE === "True" ||
-    env.DEBUG_MODE === "true"
-  );
-  const logLevel = isDebugMode ? "DEBUG" : "INFO";
+  const isDebugMode: boolean = determineIsDebugMode(env);
+  const logLevel = determineLogLevel(env);
   const slackApi = new SlackAPI(token, { logLevel });
   const user = user_id;
   const userInfo = await fetchUserDetails({ slackApi, user: user_id });
@@ -98,31 +96,18 @@ export async function injectComponents(
   if (settings.user) {
     language = settings.language;
     country = settings.country_id;
+    if (!settings.offset || settings.offset !== timeOffset) {
+      const attributes = { ...settings };
+      attributes.offset = timeOffset;
+      await us.save({ attributes });
+    }
   }
 
   const ph = PHMapper(client, logLevel);
-  let _holidays: SavedAttributes<PH> | undefined;
-  const holidays = async () => {
-    if (_holidays) return _holidays;
-    const year = _yyyymmdd.substring(0, 4);
-    _holidays = (await ph.findById(`${country}-${year}`)).item;
-    return _holidays;
-  };
+  const holidays = buildHolidays(ph, country, _yyyymmdd);
 
-  let _canAccessAdminFeature: boolean | undefined;
   const au = AUMapper(client, logLevel);
-  const canAccessAdminFeature = async () => {
-    if (_canAccessAdminFeature) return _canAccessAdminFeature;
-    const items = (await au.findAll({ limit: 1 })).items;
-    const noAdminUsers = items === undefined || items.length === 0;
-    if (noAdminUsers) {
-      _canAccessAdminFeature = true;
-      return _canAccessAdminFeature;
-    }
-    const thisUserCanAccess = (await au.findById(user)).item.user !== undefined;
-    _canAccessAdminFeature = thisUserCanAccess;
-    return _canAccessAdminFeature;
-  };
+  const canAccessAdminFeature = buildCanAccessAdminFeature(au, user);
 
   return {
     isDebugMode,
@@ -144,8 +129,45 @@ export async function injectComponents(
     op: OPMapper(client, logLevel),
     au,
     l: LMapper(client, logLevel),
+    av: AVMapper(client, logLevel),
     holidays,
     yyyymmdd: _yyyymmdd,
     offset: timeOffset,
   };
+}
+
+export function buildCanAccessAdminFeature(
+  au: DataMapper<AU>,
+  user: string,
+): () => Promise<boolean> {
+  let _canAccessAdminFeature: boolean | undefined;
+  const canAccessAdminFeature = async () => {
+    if (_canAccessAdminFeature) return _canAccessAdminFeature;
+    const items = (await au.findAll({ limit: 1 })).items;
+    const noAdminUsers = items === undefined || items.length === 0;
+    if (noAdminUsers) {
+      _canAccessAdminFeature = true;
+      return _canAccessAdminFeature;
+    }
+    const thisUserCanAccess = (await au.findById(user)).item.user !== undefined;
+    _canAccessAdminFeature = thisUserCanAccess;
+    return _canAccessAdminFeature;
+  };
+  return canAccessAdminFeature;
+}
+
+export function buildHolidays(
+  ph: DataMapper<PH>,
+  country: string | undefined,
+  _yyyymmdd: string,
+): () => Promise<SavedAttributes<PH> | undefined> {
+  let _holidays: SavedAttributes<PH> | undefined;
+  const holidays = async () => {
+    if (country === undefined) return undefined;
+    if (_holidays) return _holidays;
+    const year = _yyyymmdd.substring(0, 4);
+    _holidays = (await ph.findById(`${country}-${year}`)).item;
+    return _holidays;
+  };
+  return holidays;
 }

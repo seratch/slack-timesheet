@@ -14,6 +14,7 @@ import AdminUsers from "../../datastores/admin_users.ts";
 import Projects from "../../datastores/projects.ts";
 import OrganizationPolicies from "../../datastores/organization_policies.ts";
 import Lifelogs from "../../datastores/lifelogs.ts";
+import ActiveViews from "../../datastores/active_views.ts";
 
 import { timeToNumber, todayYYYYMMDD } from "./datetime.ts";
 import { CountryCode, Label } from "./constants.ts";
@@ -29,12 +30,13 @@ export type AU = typeof AdminUsers.definition;
 export type P = typeof Projects.definition;
 export type OP = typeof OrganizationPolicies.definition;
 export type L = typeof Lifelogs.definition;
+export type AV = typeof ActiveViews.definition;
 
 // -----------------------------------------
 // DataMapper initializer
 // -----------------------------------------
 
-function createDataMapper<DEF extends TE | US | C | PH | AU | P | OP | L>(
+function createDataMapper<DEF extends TE | US | C | PH | AU | P | OP | L | AV>(
   def: DEF,
   client: Client,
   logLevel: LogLevel,
@@ -69,6 +71,9 @@ export function OPMapper(client: Client, logLevel: LogLevel): DataMapper<OP> {
 }
 export function LMapper(client: Client, logLevel: LogLevel): DataMapper<L> {
   return createDataMapper(Lifelogs.definition, client, logLevel);
+}
+export function AVMapper(client: Client, logLevel: LogLevel): DataMapper<AV> {
+  return createDataMapper(ActiveViews.definition, client, logLevel);
 }
 
 // -----------------------------------------
@@ -493,4 +498,55 @@ export async function fetchProject(
 ): Promise<SavedAttributes<P>> {
   const response = await p.findById(code);
   return response.item;
+}
+
+// -----------------------------------------
+// ActiveViews
+// -----------------------------------------
+
+interface saveLastActiveViewArgs {
+  av: DataMapper<AV>;
+  view_id: string;
+  user_id: string;
+  callback_id: string;
+}
+export async function saveLastActiveView(
+  { av, view_id, user_id, callback_id }: saveLastActiveViewArgs,
+) {
+  const last_updated_at = Math.floor(new Date().getTime() / 1000);
+  const attributes: Attributes<AV> = {
+    view_id,
+    user_id,
+    last_updated_callback_id: callback_id,
+    last_updated_at,
+  };
+  await av.save({ attributes });
+}
+
+interface deleteActiveViewArgs {
+  av: DataMapper<AV>;
+  view_id: string;
+}
+export async function deleteClosingOneFromActiveViews(
+  { av, view_id }: deleteActiveViewArgs,
+) {
+  await av.deleteById({ id: view_id });
+}
+
+interface cleanUpOldActiveViewsArgs {
+  av: DataMapper<AV>;
+  user_id: string;
+}
+export async function cleanUpOldActiveViews(
+  { av, user_id }: cleanUpOldActiveViewsArgs,
+) {
+  const views = (await av.findAllBy({ where: { user_id } })).items;
+  const oneDayAgo = Math.floor(new Date().getTime() / 1000) - 60 * 60 * 24;
+  if (views) {
+    for (const view of views) {
+      if (view.last_updated_at < oneDayAgo) {
+        await av.deleteById({ id: view.view_id });
+      }
+    }
+  }
 }

@@ -12,6 +12,8 @@ const datastore = DefineDatastore(
       country_id: { type: Schema.types.string, required: false },
       // work, work_and_lifelogs
       app_mode: { type: Schema.types.string, required: false },
+      // time offset
+      offset: { type: Schema.types.number, requried: true },
     },
   } as const,
 );

@@ -13,6 +13,7 @@ import {
   RichTextBlock,
   SlackAPIClient,
   StaticSelect,
+  ViewsUpdateResponse,
 } from "slack-web-api-client/mod.ts";
 
 import { i18n } from "./i18n.ts";
@@ -110,6 +111,7 @@ export function newView(language: string): ModalView {
     "type": "modal",
     "title": TitleMain(language),
     "close": QuitApp(language),
+    "notify_on_close": true,
     "blocks": [],
   };
 }
@@ -298,31 +300,29 @@ export async function syncMainView({
   isDebugMode,
   isLifelogEnabled,
   manualEntryPermitted,
-}: syncMainViewArgs) {
+}: syncMainViewArgs): Promise<ViewsUpdateResponse> {
   const privateMetadata: MainViewPrivateMetadata = { yyyymmdd };
-  await slackApi.views.update({
-    view_id: viewId,
-    view: {
-      "type": "modal",
-      "callback_id": CallbackId.MainView,
-      "private_metadata": JSON.stringify(privateMetadata),
-      "title": TitleMain(language),
-      "close": QuitApp(language),
-      "blocks": await mainViewBlocks({
-        isDebugMode,
-        isLifelogEnabled,
-        manualEntryPermitted,
-        entry: entry,
-        lifelog: lifelog,
-        offset,
-        language,
-        country,
-        holidays,
-        canAccessAdminFeature,
-        yyyymmdd,
-      }),
-    },
-  });
+  const view: ModalView = {
+    "type": "modal",
+    "callback_id": CallbackId.MainView,
+    "private_metadata": JSON.stringify(privateMetadata),
+    "title": TitleMain(language),
+    "close": QuitApp(language),
+    "blocks": await mainViewBlocks({
+      isDebugMode,
+      isLifelogEnabled,
+      manualEntryPermitted,
+      entry: entry,
+      lifelog: lifelog,
+      offset,
+      language,
+      country,
+      holidays,
+      canAccessAdminFeature,
+      yyyymmdd,
+    }),
+  };
+  return await slackApi.views.update({ view_id: viewId, view });
 }
 
 interface toMainViewArgs {
@@ -569,12 +569,6 @@ export async function mainViewBlocks({
 
   const reportItems = [];
   if (r && r.work_minutes + r.break_time_hours + r.time_off_minutes > 0) {
-    if (isDebugMode) {
-      console.log(
-        "### The daily report for the main view:\n" +
-          JSON.stringify(r, null, 2),
-      );
-    }
     const workDuration = [
       hourDuration(r.work_hours, language),
       minuteDuration(r.work_minutes, language),
@@ -1628,8 +1622,8 @@ export async function syncProjectMainView({
   projects,
   slackApi,
   language,
-}: syncProjectMainViewArgs) {
-  await slackApi.views.update({
+}: syncProjectMainViewArgs): Promise<ViewsUpdateResponse> {
+  return await slackApi.views.update({
     view_id: viewId,
     view: toProjectMainView({ view: newView(language), projects, language }),
   });

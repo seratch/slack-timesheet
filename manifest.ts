@@ -1,5 +1,7 @@
 import { Manifest } from "deno-slack-sdk/mod.ts";
 import Timesheet from "./workflows/timesheet.ts";
+import ActiveViewRefresher from "./workflows/active_view_refresher.ts";
+import ActiveViewRefresherOnce from "./workflows/active_view_refresher_once.ts";
 
 import TimeEntries from "./datastores/time_entries.ts";
 import UserSettings from "./datastores/user_settings.ts";
@@ -9,6 +11,7 @@ import AdminUsers from "./datastores/admin_users.ts";
 import Projects from "./datastores/projects.ts";
 import OrganizationPolicies from "./datastores/organization_policies.ts";
 import Lifelogs from "./datastores/lifelogs.ts";
+import ActiveViews from "./datastores/active_views.ts";
 
 export default Manifest({
   name: "Timesheet",
@@ -19,6 +22,8 @@ export default Manifest({
   ],
   workflows: [
     Timesheet,
+    ActiveViewRefresher,
+    ActiveViewRefresherOnce,
   ],
   datastores: [
     TimeEntries,
@@ -29,6 +34,7 @@ export default Manifest({
     AdminUsers,
     OrganizationPolicies,
     Lifelogs,
+    ActiveViews,
   ],
   botScopes: [
     "commands",
