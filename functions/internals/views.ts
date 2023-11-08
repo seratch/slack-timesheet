@@ -440,7 +440,9 @@ export async function mainViewBlocks({
   let breakTime = false;
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
-    const { start, end, project_code, what_to_do, type } = entry;
+    const { start, project_code, what_to_do, type } = entry;
+    const end = entry.end ?? "";
+
     let typeLabel = "";
     let emoji = "";
     if (type === EntryType.Work) {
@@ -459,6 +461,12 @@ export async function mainViewBlocks({
       emoji = Emoji.Lifelog;
     }
     const options: PlainTextOption[] = [];
+    if (end === "") {
+      options.push({
+        "text": { "type": "plain_text", "text": i18n(Label.Finish, language) },
+        "value": `finish___${JSON.stringify(entry)}`,
+      });
+    }
     if (manualEntryPermitted) {
       options.push({
         "text": { "type": "plain_text", "text": i18n(Label.Edit, language) },
@@ -469,14 +477,14 @@ export async function mainViewBlocks({
       "text": { "type": "plain_text", "text": i18n(Label.Delete, language) },
       "value": `delete___${JSON.stringify(entry)}`,
     });
-    if (end === undefined) end === "";
+
     const label = `*${emoji} ${typeLabel}:* ${start} - ${end || ""}`;
     entryBlocks.push({
       "type": "section",
       "text": { "type": "mrkdwn", "text": label },
       "accessory": {
         "type": "overflow",
-        "action_id": ActionId.EditOrDeleteEntry,
+        "action_id": ActionId.EditOrFinishOrDeleteEntry,
         "options": options,
       },
     });
@@ -633,20 +641,11 @@ export async function mainViewBlocks({
         );
       }
     }
-    if (r.lifelogs && r.lifelogs.length > 0) {
-      reportItems.push("");
-      for (const log of r.lifelogs) {
-        reportItems.push(
-          "*" + Emoji.Lifelog + " " + log.what_to_do + "*: " +
-            hourDuration(log.spent_hours, language) + " " +
-            minuteDuration(log.spent_minutes, language),
-        );
-      }
-    }
-  } else {
-    if (r && r.lifelogs && r.lifelogs.length > 0) {
-      reportItems.push("");
-      for (const log of r.lifelogs) {
+  }
+  if (r && r.lifelogs && r.lifelogs.length > 0) {
+    reportItems.push("");
+    for (const log of r.lifelogs) {
+      if (log.spent_minutes) {
         reportItems.push(
           "*" + Emoji.Lifelog + " " + log.what_to_do + "*: " +
             hourDuration(log.spent_hours, language) + " " +
@@ -766,9 +765,8 @@ export async function mainViewBlocks({
   }
   const blocks = topBlocks.concat(entryBlocks);
 
-  blocks.push({ "type": "divider" });
-
   if (manualEntryPermitted || isLifelogEnabled) {
+    blocks.push({ "type": "divider" });
     blocks.push({
       "type": "section",
       "text": { "type": "mrkdwn", "text": " " },

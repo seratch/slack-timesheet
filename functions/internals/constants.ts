@@ -57,7 +57,7 @@ export class ActionId {
   static ManualEntry = "manual_entry";
   static SelectManualEntryType = "select_manual_entry_type";
   static AddLifelog = "add_lifelog";
-  static EditOrDeleteEntry = "edit_or_delete_entry";
+  static EditOrFinishOrDeleteEntry = "edit_or_finish_or_delete_entry";
   static StartWork = "start_work";
   static FinishWork = "finish_work";
   static StartBreakTime = "start_break_time";
@@ -154,6 +154,7 @@ export class Label {
   static Add = "Add";
   static Edit = "Edit";
   static Delete = "Delete";
+  static Finish = "Finish";
   static ManualEntry = "Manual entry";
   static EntryType = "Entry Type";
   static Year = "Year";

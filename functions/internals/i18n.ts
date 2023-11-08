@@ -45,6 +45,7 @@ labels[Label.End] = { "ja": "終了" };
 labels[Label.Add] = { "ja": "追加" };
 labels[Label.WhatToDo] = { "ja": "やること" };
 labels[Label.Edit] = { "ja": "編集" };
+labels[Label.Finish] = { "ja": "終了" };
 labels[Label.Delete] = { "ja": "削除" };
 labels[Label.Date] = { "ja": "年月日" };
 labels[Label.ManualEntry] = { "ja": "手入力" };

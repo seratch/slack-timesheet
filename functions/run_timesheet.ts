@@ -388,11 +388,11 @@ export default SlackFunction(
   // Edit/Delete Entries
   // --------------------------------------------
   .addBlockActionsHandler(
-    ActionId.EditOrDeleteEntry,
+    ActionId.EditOrFinishOrDeleteEntry,
     async (args) => {
       const { body, action } = args;
       const components = await injectComponents({ ...args });
-      const { user, slackApi } = components;
+      const { user, slackApi, offset } = components;
       try {
         const value: string = action.selected_option.value;
         let entries: string[] = [];
@@ -426,6 +426,53 @@ export default SlackFunction(
             const idxToDel = entries.indexOf(rawEntry);
             if (idxToDel > -1) entries.splice(idxToDel, 1);
             entry = await saveTimeEntry({ attributes, ...components });
+          }
+          await syncMainView({
+            viewId: body.view.id,
+            entry,
+            lifelog,
+            manualEntryPermitted,
+            ...components,
+          });
+        } else if (value.startsWith("finish___")) {
+          // Finish the time entry
+          const sent = value.split("___")[1];
+          const entryWithType = deserializeEntry(sent);
+          if (!entryWithType) return {}; // invalid data in datastore
+          const rawEntry = serializeEntry(entryWithType);
+          if (!rawEntry) return {}; // invalid data in datastore
+          let entry = await fetchTimeEntry({ ...components });
+          let lifelog = await fetchLifelog({ ...components });
+          if (entryWithType.type === EntryType.Lifelog) {
+            const attributes = { ...lifelog };
+            entries = attributes.logs || [];
+            const idxToFinish = entries.indexOf(rawEntry);
+            if (idxToFinish > -1) {
+              const e = deserializeEntry(entries[idxToFinish]);
+              if (e) {
+                e.end = nowHHMM(offset);
+                entries[idxToFinish] = serializeEntry(e);
+                lifelog = await saveLifelog({ attributes, ...components });
+              }
+            }
+          } else {
+            const attributes = { ...entry };
+            if (entryWithType.type === EntryType.Work) {
+              entries = attributes.work_entries || [];
+            } else if (entryWithType.type === EntryType.BreakTime) {
+              entries = attributes.break_time_entries || [];
+            } else if (entryWithType.type === EntryType.TimeOff) {
+              entries = attributes.time_off_entries || [];
+            }
+            const idxToFinish = entries.indexOf(rawEntry);
+            if (idxToFinish > -1) {
+              const e = deserializeEntry(entries[idxToFinish]);
+              if (e) {
+                e.end = nowHHMM(offset);
+                entries[idxToFinish] = serializeEntry(e);
+                entry = await saveTimeEntry({ attributes, ...components });
+              }
+            }
           }
           await syncMainView({
             viewId: body.view.id,
