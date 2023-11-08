@@ -78,11 +78,9 @@ export default SlackFunction(def, async ({ token, env, client }) => {
     const foundUsers: string[] = [];
     for (const activeView of activeViews) {
       try {
-        if (foundUsers.includes(activeView.user_id)) {
-          await av.deleteById({ id: activeView.view_id });
-          continue;
+        if (!foundUsers.includes(activeView.user_id)) {
+          foundUsers.push(activeView.user_id);
         }
-        foundUsers.push(activeView.user_id);
 
         if (activeView.last_updated_callback_id === CallbackId.MainView) {
           if (activeView.last_updated_at < now - minutes) {
