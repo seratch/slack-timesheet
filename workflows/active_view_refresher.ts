@@ -8,11 +8,12 @@ const workflow = DefineWorkflow({
   input_parameters: { properties: {}, required: [] },
 });
 
-const timesPerHour = 2;
-for (let i = 0; i < timesPerHour * 24; i++) {
+const executionsPerHour = 2;
+const delayMinutes = 60 / executionsPerHour;
+for (let i = 0; i < executionsPerHour * 24; i++) {
   workflow.addStep(RefreshMainViews, {});
   workflow.addStep(Schema.slack.functions.Delay, {
-    minutes_to_delay: 60 / timesPerHour,
+    minutes_to_delay: delayMinutes,
   });
 }
 
