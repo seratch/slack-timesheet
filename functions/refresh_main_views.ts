@@ -88,36 +88,31 @@ export default SlackFunction(def, async ({ token, env, client }) => {
         if (activeView.last_updated_callback_id === CallbackId.MainView) {
           if (activeView.last_updated_at < now - minutes) {
             const user = activeView.user_id;
-            const settings = (await us.findById(activeView.user_id)).item;
-            const language = settings.language || LanguageCode.English;
-            const country = settings.country_id;
-            const offset = settings.offset || 0;
+            const settings = (await us.findById(user)).item;
+            const [language, country, offset, isLifelogEnabled] = [
+              settings.language || LanguageCode.English,
+              settings.country_id,
+              settings.offset || 0,
+              settings.app_mode === AppModeCode.WorkAndLifelogs,
+            ];
             const yyyymmdd = todayYYYYMMDD(offset);
-            const entry = await fetchTimeEntry({ te, user, offset, yyyymmdd });
-            const isLifelogEnabled =
-              settings.app_mode === AppModeCode.WorkAndLifelogs;
-            const lifelog = isLifelogEnabled
-              ? await fetchLifelog({ l, user, offset, yyyymmdd })
-              : undefined;
-            const manualEntryPermitted = await isManualEntryPermitted({ op });
-            const canAccessAdminFeature = buildCanAccessAdminFeature(au, user);
-            const holidays = buildHolidays(ph, country, yyyymmdd);
-
             try {
               const result = await slackApi.views.update({
                 view_id: activeView.view_id,
                 view: await toMainView({
                   view: newView(language),
-                  entry,
-                  lifelog,
-                  manualEntryPermitted,
+                  entry: await fetchTimeEntry({ te, user, offset, yyyymmdd }),
+                  lifelog: isLifelogEnabled
+                    ? await fetchLifelog({ l, user, offset, yyyymmdd })
+                    : undefined,
                   isDebugMode,
-                  canAccessAdminFeature,
                   isLifelogEnabled,
                   offset,
                   language,
                   country,
-                  holidays,
+                  manualEntryPermitted: await isManualEntryPermitted({ op }),
+                  canAccessAdminFeature: buildCanAccessAdminFeature(au, user),
+                  holidays: buildHolidays(ph, country, yyyymmdd),
                   yyyymmdd,
                 }),
               });

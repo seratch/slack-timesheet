@@ -527,7 +527,7 @@ interface deleteActiveViewArgs {
   av: DataMapper<AV>;
   view_id: string;
 }
-export async function deleteClosingOneFromActiveViews(
+export async function removeClosingModalFromActiveViews(
   { av, view_id }: deleteActiveViewArgs,
 ) {
   await av.deleteById(view_id);

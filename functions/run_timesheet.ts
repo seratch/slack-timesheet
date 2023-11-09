@@ -49,7 +49,6 @@ import {
 import {
   AVMapper,
   cleanUpOldActiveViews,
-  deleteClosingOneFromActiveViews,
   fetchAllActiveProjects,
   fetchAllCountries,
   fetchAllMemberMonthTimeEntries,
@@ -65,6 +64,7 @@ import {
   isLifelogRecord,
   L,
   P,
+  removeClosingModalFromActiveViews,
   saveLastActiveView,
   saveLifelog,
   saveProject,
@@ -388,7 +388,7 @@ export default SlackFunction(
             user_id: user,
             ...components,
           });
-          await deleteClosingOneFromActiveViews({
+          await removeClosingModalFromActiveViews({
             view_id: view.id,
             ...components,
           });
@@ -456,7 +456,7 @@ export default SlackFunction(
             user_id: user,
             ...components,
           });
-          await deleteClosingOneFromActiveViews({
+          await removeClosingModalFromActiveViews({
             view_id: view.id,
             ...components,
           });
@@ -711,7 +711,7 @@ export default SlackFunction(
           user_id: user,
           ...components,
         });
-        await deleteClosingOneFromActiveViews({
+        await removeClosingModalFromActiveViews({
           view_id: view.id,
           ...components,
         });
@@ -837,7 +837,7 @@ export default SlackFunction(
           user_id: user,
           ...components,
         });
-        await deleteClosingOneFromActiveViews({
+        await removeClosingModalFromActiveViews({
           view_id: view.id,
           ...components,
         });
@@ -1054,7 +1054,7 @@ export default SlackFunction(
           user_id: user,
           ...components,
         });
-        await deleteClosingOneFromActiveViews({
+        await removeClosingModalFromActiveViews({
           view_id: view.id,
           ...components,
         });
@@ -1330,7 +1330,7 @@ export default SlackFunction(
             user_id: user,
             ...components,
           });
-          await deleteClosingOneFromActiveViews({
+          await removeClosingModalFromActiveViews({
             view_id: view.id,
             ...components,
           });
@@ -1402,7 +1402,7 @@ export default SlackFunction(
           user_id: user,
           ...components,
         });
-        await deleteClosingOneFromActiveViews({
+        await removeClosingModalFromActiveViews({
           view_id: view.id,
           ...components,
         });
@@ -1706,7 +1706,7 @@ export default SlackFunction(
           user_id: user,
           ...components,
         });
-        await deleteClosingOneFromActiveViews({
+        await removeClosingModalFromActiveViews({
           view_id: view.id,
           ...components,
         });
@@ -1797,7 +1797,7 @@ export default SlackFunction(
           user_id: user,
           ...components,
         });
-        await deleteClosingOneFromActiveViews({
+        await removeClosingModalFromActiveViews({
           view_id: view.id,
           ...components,
         });
