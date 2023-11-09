@@ -430,12 +430,6 @@ export async function mainViewBlocks({
     .sort((a, b) => timeToNumber(a.start) > timeToNumber(b.start) ? 1 : -1);
 
   const entryBlocks: AnyModalBlock[] = [];
-  const doingLifelog = lifelog?.logs
-    ? lifelog.logs.filter((l) => {
-      const end = (deserializeEntry(l) as Lifelog).end;
-      return end === undefined || end === "";
-    })?.length > 0
-    : false;
   let businessHours = false;
   let breakTime = false;
   for (let i = 0; i < entries.length; i++) {
@@ -724,37 +718,42 @@ export async function mainViewBlocks({
       language,
     });
 
-    if (doingLifelog) {
+    const workingOnLifelogItem = (lifelog?.logs)
+      ? (lifelog.logs.filter((l) => {
+        const end = deserializeEntry(l)?.end;
+        return end === undefined || end === "";
+      })?.length === 1)
+      : false;
+
+    if (businessHours) {
+      if (breakTime) {
+        topBlocks.push({
+          "type": "actions",
+          "elements": isLifelogEnabled
+            ? workingOnLifelogItem
+              ? [FinishBreakTimeButton, FinishLifelogButton]
+              : [FinishBreakTimeButton, StartLifelogButton]
+            : [FinishBreakTimeButton],
+        });
+      } else {
+        topBlocks.push({
+          "type": "actions",
+          "elements": isLifelogEnabled
+            ? workingOnLifelogItem
+              ? [StartBreakTimeButton, FinishWorkButton, FinishLifelogButton]
+              : [StartBreakTimeButton, FinishWorkButton, StartLifelogButton]
+            : [StartBreakTimeButton, FinishWorkButton],
+        });
+      }
+    } else {
       topBlocks.push({
         "type": "actions",
-        "elements": [FinishLifelogButton],
+        "elements": isLifelogEnabled
+          ? workingOnLifelogItem
+            ? [StartWorkButton, StartBreakTimeButton, FinishLifelogButton]
+            : [StartWorkButton, StartBreakTimeButton, StartLifelogButton]
+          : [StartWorkButton, StartBreakTimeButton],
       });
-    } else {
-      if (businessHours) {
-        if (breakTime) {
-          topBlocks.push({
-            "type": "actions",
-            "elements": [FinishBreakTimeButton],
-          });
-        } else {
-          topBlocks.push({
-            "type": "actions",
-            "elements": [StartBreakTimeButton, FinishWorkButton],
-          });
-        }
-      } else {
-        if (isLifelogEnabled) {
-          topBlocks.push({
-            "type": "actions",
-            "elements": [StartWorkButton, StartLifelogButton],
-          });
-        } else {
-          topBlocks.push({
-            "type": "actions",
-            "elements": [StartWorkButton, StartBreakTimeButton],
-          });
-        }
-      }
     }
   }
   const blocks = topBlocks.concat(entryBlocks);
