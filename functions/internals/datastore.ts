@@ -530,7 +530,7 @@ interface deleteActiveViewArgs {
 export async function deleteClosingOneFromActiveViews(
   { av, view_id }: deleteActiveViewArgs,
 ) {
-  await av.deleteById({ id: view_id });
+  await av.deleteById(view_id);
 }
 
 interface cleanUpOldActiveViewsArgs {
@@ -545,7 +545,7 @@ export async function cleanUpOldActiveViews(
   if (views) {
     for (const view of views) {
       if (view.last_updated_at < oneDayAgo) {
-        await av.deleteById({ id: view.view_id });
+        await av.deleteById(view.view_id);
       }
     }
   }

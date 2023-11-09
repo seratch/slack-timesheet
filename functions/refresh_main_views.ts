@@ -1,5 +1,8 @@
 import { DefineFunction, SlackFunction } from "deno-slack-sdk/mod.ts";
-import { SlackAPIClient as SlackAPI } from "slack-web-api-client/mod.ts";
+import {
+  SlackAPIClient as SlackAPI,
+  SlackAPIError,
+} from "slack-web-api-client/mod.ts";
 import { SavedAttributes } from "deno-slack-data-mapper/mod.ts";
 
 import {
@@ -126,8 +129,12 @@ export default SlackFunction(def, async ({ token, env, client }) => {
               });
             } catch (e) {
               console.log(`Failed to update an active view: ${e}`);
-              if (e.message.includes('"not_found"')) {
-                await av.deleteById({ id: activeView.view_id });
+              if (e instanceof SlackAPIError) {
+                const apiError = e as SlackAPIError;
+                if (apiError.error === "not_found") {
+                  // The modal view seems to be already closed
+                  await av.deleteById(activeView.view_id);
+                }
               }
             }
           }

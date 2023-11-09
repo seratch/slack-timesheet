@@ -222,7 +222,7 @@ export default SlackFunction(
     try {
       const logLevel = determineLogLevel(env);
       const av = AVMapper(client, logLevel);
-      await av.deleteById({ id: view.id });
+      await av.deleteById(view.id);
     } catch (e) {
       console.log(`Failed to delete view data in datastore due to ${e}`);
     }
