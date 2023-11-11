@@ -67,7 +67,7 @@ export function timeDuration(
     zeroMinuteAllowed = hours === undefined || hours === 0;
   }
   const m = minuteDuration(minutes, language, zeroMinuteAllowed);
-  return [m, h].filter((e) => e.length > 0).join(" ");
+  return [h, m].filter((e) => e.length > 0).join(" ");
 }
 
 export function hourDuration(hours: number, language: string): string {
