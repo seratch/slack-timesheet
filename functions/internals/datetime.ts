@@ -55,6 +55,21 @@ export function dayDuration(days: number, language: string): string {
   return "";
 }
 
+export function timeDuration(
+  hours: number,
+  minutes: number,
+  language: string,
+  returnZero: true | false = false,
+): string {
+  const h = hourDuration(hours, language);
+  let zeroMinuteAllowed = returnZero;
+  if (zeroMinuteAllowed) {
+    zeroMinuteAllowed = hours === undefined || hours === 0;
+  }
+  const m = minuteDuration(minutes, language, zeroMinuteAllowed);
+  return [m, h].filter((e) => e.length > 0).join(" ");
+}
+
 export function hourDuration(hours: number, language: string): string {
   if (hours >= 1) {
     const unit = i18n(hours >= 2 ? Label.hours : Label.hour, language);
@@ -62,9 +77,14 @@ export function hourDuration(hours: number, language: string): string {
   }
   return "";
 }
-export function minuteDuration(minutes: number, language: string): string {
+
+export function minuteDuration(
+  minutes: number,
+  language: string,
+  returnZero: true | false = false,
+): string {
   const m = Math.floor(minutes) % 60;
-  if (m !== 0) {
+  if (returnZero || m !== 0) {
     const unit = i18n(m >= 2 ? Label.minutes : Label.minute, language);
     return m + " " + unit;
   }

@@ -19,9 +19,8 @@ import {
 import { i18n } from "./i18n.ts";
 import {
   clockEmoji,
-  hourDuration,
-  minuteDuration,
   nowHHMM,
+  timeDuration,
   timeToNumber,
   toDateFormat,
   todayForDatepicker,
@@ -455,7 +454,7 @@ export async function mainViewBlocks({
       emoji = Emoji.Lifelog;
     }
     const options: PlainTextOption[] = [];
-    if (end === "") {
+    if (entry.end === undefined || end === "") {
       options.push({
         "text": { "type": "plain_text", "text": i18n(Label.Finish, language) },
         "value": `finish___${JSON.stringify(entry)}`,
@@ -482,11 +481,13 @@ export async function mainViewBlocks({
         "options": options,
       },
     });
-    if (end === "" || end === undefined) {
+    if (entry.end === undefined || end === "") {
       if (type === EntryType.BreakTime) {
         breakTime = true;
       }
-      businessHours = true;
+      if (!businessHours && type === EntryType.Work) {
+        businessHours = true;
+      }
     }
   }
 
@@ -563,32 +564,33 @@ export async function mainViewBlocks({
 
   const reportItems = [];
   if (r && r.work_minutes + r.break_time_hours + r.time_off_minutes > 0) {
-    const workDuration = [
-      hourDuration(r.work_hours, language),
-      minuteDuration(r.work_minutes, language),
-    ].filter((e) => e).join(" ");
+    const workDuration = timeDuration(
+      r.work_hours,
+      r.work_minutes,
+      language,
+    );
     const overtimeWorkDuration =
-      (r.overtime_work_hours && r.overtime_work_minutes
-        ? [
-          hourDuration(r.overtime_work_hours, language),
-          minuteDuration(r.overtime_work_minutes, language),
-        ].filter((e) => e)
-        : []).join(" ");
+      r.overtime_work_hours && r.overtime_work_minutes
+        ? timeDuration(r.overtime_work_hours, r.overtime_work_minutes, language)
+        : "";
     const nightShiftWorkDuration =
-      (r.night_shift_work_hours && r.night_shift_work_minutes
-        ? [
-          hourDuration(r.night_shift_work_hours, language),
-          minuteDuration(r.night_shift_work_minutes, language),
-        ].filter((e) => e)
-        : []).join(" ");
-    const breakTimeDuration = [
-      hourDuration(r.break_time_hours, language),
-      minuteDuration(r.break_time_minutes, language),
-    ].filter((e) => e).join(" ");
-    const timeOffDuration = [
-      hourDuration(r.time_off_hours, language),
-      minuteDuration(r.time_off_minutes, language),
-    ].filter((e) => e).join(" ");
+      r.night_shift_work_hours && r.night_shift_work_minutes
+        ? timeDuration(
+          r.night_shift_work_hours,
+          r.night_shift_work_minutes,
+          language,
+        )
+        : "";
+    const breakTimeDuration = timeDuration(
+      r.break_time_hours,
+      r.break_time_minutes,
+      language,
+    );
+    const timeOffDuration = timeDuration(
+      r.time_off_hours,
+      r.time_off_minutes,
+      language,
+    );
     if (workDuration) {
       reportItems.push(
         Emoji.Work + " *" + i18n(Label.Work, language) + ":* " + workDuration,
@@ -624,8 +626,7 @@ export async function mainViewBlocks({
       for (const p of r.projects) {
         reportItems.push(
           "*" + p.project_code + "*: " +
-            hourDuration(p.work_hours, language) + " " +
-            minuteDuration(p.work_minutes, language),
+            timeDuration(p.work_hours, p.work_minutes, language),
         );
       }
     }
@@ -633,13 +634,10 @@ export async function mainViewBlocks({
   if (r && r.lifelogs && r.lifelogs.length > 0) {
     reportItems.push("");
     for (const log of r.lifelogs) {
-      if (log.spent_minutes) {
-        reportItems.push(
-          "*" + Emoji.Lifelog + " " + log.what_to_do + "*: " +
-            hourDuration(log.spent_hours, language) + " " +
-            minuteDuration(log.spent_minutes, language),
-        );
-      }
+      reportItems.push(
+        "*" + Emoji.Lifelog + " " + log.what_to_do + "*: " +
+          timeDuration(log.spent_hours, log.spent_minutes, language),
+      );
     }
   }
   const report = reportItems.join("\n");
@@ -725,35 +723,25 @@ export async function mainViewBlocks({
       })?.length === 1)
       : false;
 
+    const elements: Button[] = [];
     if (businessHours) {
       if (breakTime) {
-        topBlocks.push({
-          "type": "actions",
-          "elements": isLifelogEnabled
-            ? workingOnLifelogItem
-              ? [FinishBreakTimeButton, FinishLifelogButton]
-              : [FinishBreakTimeButton, StartLifelogButton]
-            : [FinishBreakTimeButton],
-        });
+        elements.push(FinishBreakTimeButton);
       } else {
-        topBlocks.push({
-          "type": "actions",
-          "elements": isLifelogEnabled
-            ? workingOnLifelogItem
-              ? [StartBreakTimeButton, FinishWorkButton, FinishLifelogButton]
-              : [StartBreakTimeButton, FinishWorkButton, StartLifelogButton]
-            : [StartBreakTimeButton, FinishWorkButton],
-        });
+        elements.push(StartBreakTimeButton);
+        elements.push(FinishWorkButton);
       }
     } else {
-      topBlocks.push({
-        "type": "actions",
-        "elements": isLifelogEnabled
-          ? workingOnLifelogItem
-            ? [StartWorkButton, StartBreakTimeButton, FinishLifelogButton]
-            : [StartWorkButton, StartBreakTimeButton, StartLifelogButton]
-          : [StartWorkButton, StartBreakTimeButton],
-      });
+      elements.push(StartWorkButton);
+    }
+    if (isLifelogEnabled) {
+      const lifelogButton = workingOnLifelogItem
+        ? FinishLifelogButton
+        : StartLifelogButton;
+      elements.push(lifelogButton);
+    }
+    if (elements.length > 0) {
+      topBlocks.push({ "type": "actions", "elements": elements });
     }
   }
   const blocks = topBlocks.concat(entryBlocks);

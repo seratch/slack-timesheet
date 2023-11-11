@@ -862,7 +862,7 @@ export default SlackFunction(
           const lastIdx = attributes.work_entries.length - 1;
           const w = attributes.work_entries[lastIdx];
           const entry = deserializeEntry(w);
-          if (entry && entry.end === "") {
+          if (entry && (entry.end === undefined || entry.end === "")) {
             const end = nowHHMM(offset);
             attributes.work_entries[lastIdx] = serializeEntry({
               ...entry,
@@ -954,7 +954,7 @@ export default SlackFunction(
             const entry = deserializeEntry(
               attributes.break_time_entries[i],
             );
-            if (entry && entry.end === "") {
+            if (entry && (entry.end === undefined || entry.end === "")) {
               const end = nowHHMM(offset);
               attributes.break_time_entries[i] = serializeEntry({
                 ...entry,

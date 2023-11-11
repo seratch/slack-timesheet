@@ -2,9 +2,8 @@ import { SavedAttributes } from "deno-slack-data-mapper/mod.ts";
 import { i18n } from "./i18n.ts";
 import {
   dayDuration,
-  hourDuration,
-  minuteDuration,
   nowHHMM,
+  timeDuration,
   timeToNumber,
   toDateFormat,
   todayYYYYMMDD,
@@ -287,7 +286,7 @@ export function generateDailyReport({
           `Unexpected entry detected (entry: ${e}, item: ${entry}`,
         );
       }
-      if (entry.end === "") {
+      if (entry.end === undefined || entry.end === "") {
         // For real-time updates on the main view
         if (isToday) entry.end = nowHHMM(offset);
       }
@@ -310,7 +309,7 @@ export function generateDailyReport({
           `Unexpected entry detected (entry: ${e}, item: ${entry}`,
         );
       }
-      if (entry.end === "") {
+      if (entry.end === undefined || entry.end === "") {
         // For real-time updates on the main view
         if (isToday) entry.end = nowHHMM(offset);
       }
@@ -333,7 +332,7 @@ export function generateDailyReport({
           `Unexpected entry detected (entry: ${e}, item: ${entry}`,
         );
       }
-      if (entry.end === "") {
+      if (entry.end === undefined || entry.end === "") {
         // For real-time updates on the main view
         if (isToday) entry.end = nowHHMM(offset);
       }
@@ -411,7 +410,7 @@ export function generateDailyReport({
           `Unexpected entry detected (entry: ${l}, item: ${entry}`,
         );
       }
-      if (entry.end === "") {
+      if (entry.end === undefined || entry.end === "") {
         // For real-time updates on the main view
         if (isToday) entry.end = nowHHMM(offset);
       }
@@ -596,32 +595,36 @@ export function toReportResultBlocks(
   country: string | undefined,
   language: string,
 ): (AnyMessageBlock | AnyModalBlock)[] {
-  const wDuration = [
-    hourDuration(report.work_hours, language),
-    minuteDuration(report.work_minutes, language),
-  ].filter((e) => e).join(" ");
-  const owDuration =
-    (report.overtime_work_hours && report.overtime_work_minutes
-      ? [
-        hourDuration(report.overtime_work_hours, language),
-        minuteDuration(report.overtime_work_minutes, language),
-      ].filter((e) => e)
-      : []).join(" ");
+  const wDuration = timeDuration(
+    report.work_hours,
+    report.work_minutes,
+    language,
+  );
+  const owDuration = report.overtime_work_hours && report.overtime_work_minutes
+    ? timeDuration(
+      report.overtime_work_hours,
+      report.overtime_work_minutes,
+      language,
+    )
+    : "";
   const nswDuration =
-    (report.night_shift_work_hours && report.night_shift_work_minutes
-      ? [
-        hourDuration(report.night_shift_work_hours, language),
-        minuteDuration(report.night_shift_work_minutes, language),
-      ].filter((e) => e)
-      : []).join(" ");
-  const btDuration = [
-    hourDuration(report.break_time_hours, language),
-    minuteDuration(report.break_time_minutes, language),
-  ].filter((e) => e).join(" ");
-  const toDuration = [
-    hourDuration(report.time_off_hours, language),
-    minuteDuration(report.time_off_minutes, language),
-  ].filter((e) => e).join(" ");
+    report.night_shift_work_hours && report.night_shift_work_minutes
+      ? timeDuration(
+        report.night_shift_work_hours,
+        report.night_shift_work_minutes,
+        language,
+      )
+      : "";
+  const btDuration = timeDuration(
+    report.break_time_hours,
+    report.break_time_minutes,
+    language,
+  );
+  const toDuration = timeDuration(
+    report.time_off_hours,
+    report.time_off_minutes,
+    language,
+  );
 
   const summary = [];
   summary.push(
@@ -666,8 +669,7 @@ export function toReportResultBlocks(
     for (const p of report.projects) {
       summary.push(
         "*" + p.project_code + "*: " +
-          hourDuration(p.work_hours, language) + " " +
-          minuteDuration(p.work_minutes, language),
+          timeDuration(p.work_hours, p.work_minutes, language),
       );
     }
   }
@@ -679,8 +681,7 @@ export function toReportResultBlocks(
     for (const p of report.lifelogs) {
       summary.push(
         "*" + p.what_to_do + "*: " +
-          hourDuration(p.spent_hours, language) + " " +
-          minuteDuration(p.spent_minutes, language),
+          timeDuration(p.spent_hours, p.spent_minutes, language),
       );
     }
   }
