@@ -669,7 +669,7 @@ export function toReportResultBlocks(
     for (const p of report.projects) {
       summary.push(
         "*" + p.project_code + "*: " +
-          timeDuration(p.work_hours, p.work_minutes, language),
+          timeDuration(p.work_hours, p.work_minutes, language, true),
       );
     }
   }
@@ -681,7 +681,7 @@ export function toReportResultBlocks(
     for (const p of report.lifelogs) {
       summary.push(
         "*" + p.what_to_do + "*: " +
-          timeDuration(p.spent_hours, p.spent_minutes, language),
+          timeDuration(p.spent_hours, p.spent_minutes, language, true),
       );
     }
   }

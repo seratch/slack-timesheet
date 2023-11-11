@@ -626,7 +626,7 @@ export async function mainViewBlocks({
       for (const p of r.projects) {
         reportItems.push(
           "*" + p.project_code + "*: " +
-            timeDuration(p.work_hours, p.work_minutes, language),
+            timeDuration(p.work_hours, p.work_minutes, language, true),
         );
       }
     }
@@ -636,7 +636,7 @@ export async function mainViewBlocks({
     for (const log of r.lifelogs) {
       reportItems.push(
         "*" + Emoji.Lifelog + " " + log.what_to_do + "*: " +
-          timeDuration(log.spent_hours, log.spent_minutes, language),
+          timeDuration(log.spent_hours, log.spent_minutes, language, true),
       );
     }
   }
