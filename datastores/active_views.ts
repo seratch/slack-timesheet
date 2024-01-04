@@ -8,6 +8,7 @@ const datastore = DefineDatastore(
       view_id: { type: Schema.types.string, required: true },
       user_id: { type: Schema.types.string, required: true },
       last_updated_at: { type: Schema.types.number, required: true }, // epoch time in seconds
+      last_accessed_at: { type: Schema.types.number, required: false }, // epoch time in seconds
       last_updated_callback_id: { type: Schema.types.string, required: true },
     },
   } as const,

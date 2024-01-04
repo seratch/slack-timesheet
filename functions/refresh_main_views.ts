@@ -12,6 +12,7 @@ import {
   AV,
   AVMapper,
   cleanUpOldActiveViews,
+  deleteActiveView,
   fetchLifelog,
   fetchTimeEntry,
   L,
@@ -86,7 +87,16 @@ export default SlackFunction(def, async ({ token, env, client }) => {
     const foundUsers: string[] = [];
     const tasks: Promise<void>[] = [];
     try {
+      const now = Math.floor(new Date().getTime() / 1000);
+      const twoDays = 48 * 60 * 60;
       for (const activeView of activeViews) {
+        if (
+          activeView.last_accessed_at === undefined ||
+          activeView.last_accessed_at < now - twoDays
+        ) {
+          await deleteActiveView({ av, view_id: activeView.view_id });
+          continue;
+        }
         tasks.push(updateActiveView({
           isDebugMode,
           activeView,
@@ -190,6 +200,7 @@ async function updateActiveView({
             callback_id: result.view!.callback_id!,
             view_id: result.view!.id!,
             user_id: user,
+            is_active_view_refresher: true,
           });
         } catch (e) {
           console.log(`Failed to update an active view: ${e}`);

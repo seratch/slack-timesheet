@@ -509,17 +509,22 @@ interface saveLastActiveViewArgs {
   view_id: string;
   user_id: string;
   callback_id: string;
+  is_active_view_refresher?: boolean;
 }
 export async function saveLastActiveView(
-  { av, view_id, user_id, callback_id }: saveLastActiveViewArgs,
+  { av, view_id, user_id, callback_id, is_active_view_refresher }:
+    saveLastActiveViewArgs,
 ) {
   const last_updated_at = Math.floor(new Date().getTime() / 1000);
-  const attributes: Attributes<AV> = {
+  let attributes: Attributes<AV> = {
     view_id,
     user_id,
     last_updated_callback_id: callback_id,
     last_updated_at,
   };
+  if (!is_active_view_refresher) {
+    attributes = { ...attributes, last_accessed_at: last_updated_at };
+  }
   await av.save({ attributes });
 }
 
@@ -549,4 +554,14 @@ export async function cleanUpOldActiveViews(
       }
     }
   }
+}
+
+interface deleteActiveViewArgs {
+  av: DataMapper<AV>;
+  view_id: string;
+}
+export async function deleteActiveView(
+  { av, view_id }: deleteActiveViewArgs,
+) {
+  await av.deleteById(view_id);
 }
