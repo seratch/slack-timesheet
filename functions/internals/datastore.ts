@@ -522,7 +522,7 @@ export async function saveLastActiveView(
     last_updated_callback_id: callback_id,
     last_updated_at,
   };
-  if (!is_active_view_refresher) {
+  if (is_active_view_refresher === undefined || !is_active_view_refresher) {
     attributes = { ...attributes, last_accessed_at: last_updated_at };
   }
   await av.save({ attributes });
