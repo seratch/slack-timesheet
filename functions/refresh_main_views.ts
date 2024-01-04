@@ -200,6 +200,7 @@ async function updateActiveView({
             callback_id: result.view!.callback_id!,
             view_id: result.view!.id!,
             user_id: user,
+            activeView,
             is_active_view_refresher: true,
           });
         } catch (e) {

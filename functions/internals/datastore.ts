@@ -510,9 +510,10 @@ interface saveLastActiveViewArgs {
   user_id: string;
   callback_id: string;
   is_active_view_refresher?: boolean;
+  activeView?: SavedAttributes<AV>;
 }
 export async function saveLastActiveView(
-  { av, view_id, user_id, callback_id, is_active_view_refresher }:
+  { av, view_id, user_id, callback_id, is_active_view_refresher, activeView }:
     saveLastActiveViewArgs,
 ) {
   const last_updated_at = Math.floor(new Date().getTime() / 1000);
@@ -524,6 +525,11 @@ export async function saveLastActiveView(
   };
   if (is_active_view_refresher === undefined || !is_active_view_refresher) {
     attributes = { ...attributes, last_accessed_at: last_updated_at };
+  } else if (activeView) {
+    attributes = {
+      ...attributes,
+      last_accessed_at: activeView.last_accessed_at,
+    };
   }
   await av.save({ attributes });
 }
