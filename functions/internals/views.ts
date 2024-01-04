@@ -997,7 +997,7 @@ interface reportStartBlocksArgs {
   blocks: AnyModalBlock[];
   isLifelogEnabled: boolean;
 }
-function reportStartBlocks(
+export function reportStartBlocks(
   { language, offset, blocks, isLifelogEnabled }: reportStartBlocksArgs,
 ) {
   const yyyymmdd = todayYYYYMMDD(offset);
@@ -1032,7 +1032,7 @@ function reportStartBlocks(
       value: i.toString(),
     });
   }
-  const month = yyyymmdd.substring(4, 6);
+  const month = Number.parseInt(yyyymmdd.substring(4, 6));
   blocks.push({
     "type": "input",
     "block_id": BlockId.Month,
@@ -1042,8 +1042,8 @@ function reportStartBlocks(
       "action_id": ActionId.Input,
       "options": months,
       "initial_option": {
-        text: { type: "plain_text", text: month },
-        value: month,
+        text: { type: "plain_text", text: month.toString() },
+        value: month.toString(),
       },
     },
   });
