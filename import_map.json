@@ -4,6 +4,6 @@
     "deno-slack-sdk/": "https://deno.land/x/deno_slack_sdk@2.14.2/",
     "deno-slack-api/": "https://deno.land/x/deno_slack_api@2.8.0/",
     "deno-slack-data-mapper/": "https://deno.land/x/deno_slack_data_mapper@2.6.2/",
-    "slack-web-api-client/": "https://deno.land/x/slack_web_api_client@1.1.2/"
+    "slack-web-api-client/": "https://deno.land/x/slack_web_api_client@1.1.3/"
   }
 }
