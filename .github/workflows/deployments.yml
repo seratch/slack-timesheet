@@ -15,9 +15,6 @@ jobs:
     # Slack CLI requires Deno runtime
     - name: Install Deno runtime
       uses: denoland/setup-deno@v1
-      with:
-        # Using the latest stable version along with Slack CLI is recommend
-        deno-version: v1.x
     - name: Cache Slack CLI installation
       id: cache-slack
       uses: actions/cache@v3
